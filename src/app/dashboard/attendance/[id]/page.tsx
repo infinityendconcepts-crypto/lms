@@ -85,12 +85,6 @@ function historyMark(record?: HistoryRecord | null): {
     return { label: record.status, tone: "slate", dot: "bg-slate-300", title: record.status };
   }
   const meta = ATTENDANCE_META[record.status];
-  const label =
-    record.status === "PRESENT" || record.status === "LATE"
-      ? "Yes"
-      : record.status === "ABSENT"
-        ? "No"
-        : "Excused";
   const title = [
     meta.label,
     record.note,
@@ -98,7 +92,7 @@ function historyMark(record?: HistoryRecord | null): {
   ]
     .filter(Boolean)
     .join(" · ");
-  return { label, tone: meta.tone, dot: meta.dot, title };
+  return { label: meta.label, tone: meta.tone, dot: meta.dot, title };
 }
 
 export default async function AttendanceRegisterPage({
@@ -476,7 +470,7 @@ export default async function AttendanceRegisterPage({
             </h2>
             <p className="mt-1 max-w-3xl text-[11px] leading-5 text-slate-500">
               Full chronological register history for {session.course.title}. Filter learners, statuses or dates,
-              then switch between the table and calendar.
+              switch between the table and calendar, and scroll right to see later registers.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -601,8 +595,11 @@ export default async function AttendanceRegisterPage({
               description="Try a different name or email, or clear the filters."
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="table" style={{ minWidth: 320 + filteredSessions.length * 112 }}>
+            <div className="max-w-full overflow-x-auto overscroll-x-contain" title="Scroll right to see later registers">
+              <table
+                className="table"
+                style={{ minWidth: Math.max(1040, 320 + filteredSessions.length * 176) }}
+              >
                 <thead>
                   <tr>
                     <th className="sticky top-0 left-0 z-30 w-14 bg-slate-50 px-3 py-3 text-center">No.</th>
@@ -614,7 +611,7 @@ export default async function AttendanceRegisterPage({
                         <th
                           key={item.id}
                           className={cn(
-                            "sticky top-0 z-20 min-w-28 px-3 py-3 text-center",
+                            "sticky top-0 z-20 min-w-44 px-3 py-3 text-center",
                             current ? "bg-brand-50/80" : "bg-slate-50/70"
                           )}
                         >
@@ -632,7 +629,7 @@ export default async function AttendanceRegisterPage({
                             href={`/dashboard/attendance/${item.id}`}
                             className="block text-[10px] font-semibold text-slate-400 hover:text-brand-700"
                           >
-                            {formatDate(item.date).replace(/,?\s*\d{4}$/, "")}
+                            {day.toLocaleDateString("en-US", { month: "long", day: "numeric" })}
                           </Link>
                           <p className="truncate text-[9px] font-normal text-slate-400">
                             {item.title || item.lesson?.title || "Register"}
@@ -665,7 +662,7 @@ export default async function AttendanceRegisterPage({
                           return (
                             <td
                               key={item.id}
-                              className={cn("min-w-28 px-3 py-2 text-center", current && "bg-brand-50/40")}
+                              className={cn("min-w-44 px-3 py-2 text-center", current && "bg-brand-50/40")}
                             >
                               <span title="Filtered out" className="text-slate-300">
                                 —
@@ -677,7 +674,7 @@ export default async function AttendanceRegisterPage({
                         return (
                           <td
                             key={item.id}
-                            className={cn("min-w-28 px-3 py-2 text-center", current && "bg-brand-50/40")}
+                            className={cn("min-w-44 px-3 py-2 text-center", current && "bg-brand-50/40")}
                           >
                             <span title={mark.title} className="inline-flex items-center justify-center gap-1.5">
                               <span className={cn("size-1.5 rounded-full", mark.dot)} />
