@@ -15,7 +15,8 @@ import { cancelPlanAction, selectPlanAction } from "@/lib/actions/billing";
 import { Badge, PageHeader, Progress, StatusBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getPlanState } from "@/lib/usage";
-import { PLAN_LIST, currencyFor, limitLabel, trialDaysLeft } from "@/lib/plans";
+import { getPlanList } from "@/lib/plan-catalog";
+import { currencyFor, limitLabel, priceFor, trialDaysLeft } from "@/lib/plans";
 import { formatBytes } from "@/lib/storage";
 import { formatDate, formatMoney } from "@/lib/utils";
 
@@ -24,11 +25,17 @@ export const metadata = { title: "Billing & plan" };
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ upgraded?: string; canceled?: string; resumed?: string; error?: string }>;
+  searchParams: Promise<{
+    upgraded?: string;
+    canceled?: string;
+    resumed?: string;
+    promo?: string;
+    error?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const ctx = await requireTenant("ADMIN");
-  const state = await getPlanState(ctx.tenant.id);
+  const [state, plans] = await Promise.all([getPlanState(ctx.tenant.id), getPlanList()]);
   const sub = state.subscription;
   const owner = ctx.role === "OWNER";
   const currency = currencyFor(ctx.tenant.currency);
@@ -60,7 +67,9 @@ export default async function BillingPage({
         >
           {sp.error ??
             (sp.upgraded
-              ? `You are now on the ${sp.upgraded[0]}${sp.upgraded.slice(1).toLowerCase()} plan.`
+              ? `You are now on the ${sp.upgraded[0]}${sp.upgraded.slice(1).toLowerCase()} plan.${
+                  sp.promo ? ` Promo ${sp.promo} was applied.` : ""
+                }`
               : sp.canceled
                 ? "Your plan will cancel at the end of the current period."
                 : "Cancellation reversed — your plan stays active.")}
@@ -87,8 +96,15 @@ export default async function BillingPage({
               </div>
               <div className="text-right">
                 <p className="text-3xl font-bold">
-                  {formatMoney(state.plan.price, currency, { decimals: 0 })}
+                  {formatMoney(sub?.effectivePrice ?? priceFor(state.plan, currency), currency, {
+                    decimals: 0,
+                  })}
                   <span className="text-sm font-medium text-slate-300">/mo</span>
+                  {sub?.promoCode && (
+                    <span className="mt-1 block text-[11px] font-medium text-emerald-300">
+                      Promo {sub.promoCode} applied
+                    </span>
+                  )}
                 </p>
                 {sub && <StatusBadge status={sub.status} />}
               </div>
@@ -255,7 +271,7 @@ export default async function BillingPage({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {PLAN_LIST.map((plan) => {
+        {plans.map((plan) => {
           const current = plan.id === state.plan.id;
           return (
             <div
@@ -272,7 +288,7 @@ export default async function BillingPage({
               <h3 className="text-sm font-bold text-slate-900">{plan.name}</h3>
               <p className="mt-0.5 text-[11px] leading-5 text-slate-500">{plan.tagline}</p>
               <p className="mt-3 text-2xl font-bold text-slate-900">
-                {formatMoney(plan.price, currency, { decimals: 0 })}
+                {formatMoney(priceFor(plan, currency), currency, { decimals: 0 })}
                 <span className="text-xs font-medium text-slate-400">/month</span>
               </p>
               <ul className="mt-3 flex-1 space-y-1.5">
@@ -289,8 +305,14 @@ export default async function BillingPage({
                     <Check className="size-3.5" /> Current plan
                   </span>
                 ) : owner ? (
-                  <form action={selectPlanAction}>
+                  <form action={selectPlanAction} className="space-y-2">
                     <input type="hidden" name="plan" value={plan.id} />
+                    <input
+                      name="promoCode"
+                      placeholder="Promo code (optional)"
+                      aria-label={`Promo code for ${plan.name}`}
+                      className="input h-9 py-1 text-[11px] uppercase"
+                    />
                     <SubmitButton variant="secondary" className="w-full" pendingText="Switching…">
                       Switch to {plan.name} <ArrowRight className="size-3.5" />
                     </SubmitButton>

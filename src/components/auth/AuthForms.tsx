@@ -156,7 +156,13 @@ export function DemoLogins({ demoAction }: { demoAction: (formData: FormData) =>
   );
 }
 
-export function SignupForm() {
+export function SignupForm({
+  plan,
+  promoCode,
+}: {
+  plan?: string;
+  promoCode?: string;
+} = {}) {
   const [state, action] = useActionState(signupAction, null);
   return (
     <div>
@@ -168,6 +174,14 @@ export function SignupForm() {
       </div>
       <Alert state={state} />
       <form action={action} className="space-y-4">
+        {plan && <input type="hidden" name="plan" value={plan} />}
+        {promoCode && <input type="hidden" name="promoCode" value={promoCode} />}
+        {(plan || promoCode) && (
+          <p className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2 text-[11px] text-brand-800">
+            {plan ? `${plan.toLowerCase()} plan selected` : "Promo applied"}
+            {promoCode ? ` · code ${promoCode}` : ""} — your 14-day trial starts today.
+          </p>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="name">

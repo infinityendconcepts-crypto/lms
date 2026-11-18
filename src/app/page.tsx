@@ -28,7 +28,8 @@ import {
 import { Logo } from "@/components/Logo";
 import { MathText } from "@/components/MathText";
 import { demoLoginAction } from "@/lib/actions/auth";
-import { DEFAULT_CURRENCY, PLAN_LIST } from "@/lib/plans";
+import { DEFAULT_CURRENCY, priceFor } from "@/lib/plans";
+import { getPlanList } from "@/lib/plan-catalog";
 import { QUESTION_META, type QuestionType } from "@/lib/questions";
 import { formatMoney } from "@/lib/utils";
 
@@ -46,7 +47,14 @@ const TYPE_ICONS: Record<QuestionType, typeof Sigma> = {
 
 const DOCS = ["PDF", "DOCX", "PPTX", "XLSX", "CSV", "MD", "TXT", "PNG", "JPG", "SVG", "MP4", "MP3", "ZIP"];
 
-export default function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ promo?: string }>;
+}) {
+  const sp = await searchParams;
+  const plans = await getPlanList();
+  const promo = String(sp.promo ?? "").trim().toUpperCase();
   return (
     <div className="bg-white text-slate-900">
       <header className="sticky top-0 z-50 border-b border-slate-100 bg-white/85 backdrop-blur-xl">
@@ -551,7 +559,7 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
-            {PLAN_LIST.map((plan) => {
+            {plans.map((plan) => {
               const featured = plan.id === "GROWTH";
               return (
                 <div
@@ -569,7 +577,7 @@ export default function LandingPage() {
                   <p className="mt-1 text-[12px] text-slate-500">{plan.tagline}</p>
                   <p className="mt-4 flex items-end gap-1">
                     <span className="text-4xl font-bold tracking-tight">
-                      {formatMoney(plan.price, DEFAULT_CURRENCY, { decimals: 0 })}
+                      {formatMoney(priceFor(plan, DEFAULT_CURRENCY), DEFAULT_CURRENCY, { decimals: 0 })}
                     </span>
                     <span className="pb-1 text-xs text-slate-500">/ month</span>
                   </p>
@@ -582,7 +590,7 @@ export default function LandingPage() {
                     ))}
                   </ul>
                   <Link
-                    href="/signup"
+                    href={`/signup?plan=${plan.id}${promo ? `&promo=${encodeURIComponent(promo)}` : ""}`}
                     className={`mt-6 w-full ${featured ? "btn-primary" : "btn-secondary"}`}
                   >
                     Start with {plan.name}

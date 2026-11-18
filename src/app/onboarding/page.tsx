@@ -8,10 +8,15 @@ import { SubmitButton } from "@/components/SubmitButton";
 
 export const metadata = { title: "Choose a workspace" };
 
-export default async function OnboardingPage() {
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plan?: string; promo?: string }>;
+}) {
   const session = await requireUser();
   const membership = await db.membership.findFirst({ where: { userId: session.user.id } });
   if (membership) redirect("/dashboard");
+  const sp = await searchParams;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-5 py-10">
@@ -30,6 +35,14 @@ export default async function OnboardingPage() {
             Hi {session.user.name.split(" ")[0]} — you are not a member of any workspace yet.
           </p>
           <form action={createWorkspaceAction} className="space-y-4">
+            {sp.plan && <input type="hidden" name="plan" value={sp.plan} />}
+            {sp.promo && <input type="hidden" name="promoCode" value={sp.promo} />}
+            {(sp.plan || sp.promo) && (
+              <p className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2 text-[11px] text-brand-800">
+                {sp.plan ? `${sp.plan.toLowerCase()} plan` : "Promo applied"}
+                {sp.promo ? ` · code ${sp.promo}` : ""} will be activated with your trial.
+              </p>
+            )}
             <div>
               <label className="label" htmlFor="name">
                 Workspace name

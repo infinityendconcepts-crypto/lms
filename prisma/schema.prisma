@@ -121,13 +121,14 @@ model Tenant {
   codePads           CodePad[]
   eligibilityChecks  CourseEligibility[]
   planTasks          CoursePlanTask[]
+  promoRedemptions   PromoRedemption[]
 }
 
 model Membership {
   id        String   @id @default(cuid())
   tenantId  String
   userId    String
-  role      String   @default("STUDENT") // OWNER | ADMIN | TEACHER | STUDENT
+  role      String   @default("STUDENT") // OWNER | ADMIN | TEACHER | MODERATOR | STUDENT
   status    String   @default("ACTIVE") // ACTIVE | SUSPENDED
   createdAt DateTime @default(now())
 
@@ -749,8 +750,51 @@ model Subscription {
   cancelAtPeriodEnd    Boolean   @default(false)
   stripeCustomerId     String?
   stripeSubscriptionId String?
+  promoCode            String?
+  effectivePrice       Float?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/** Platform-wide key/value settings (plan definitions are stored as JSON). */
+model PlatformSetting {
+  key       String   @id
+  value     String   @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+/** Super-admin promotion code. Discounts are accounting-only: no card is charged. */
+model PromoCode {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  planId         String? // null = applies to every plan
+  kind           String    @default("PERCENT") // PERCENT | FIXED
+  value          Float
+  trialDays      Int?
+  seatBoost      Int?
+  maxRedemptions Int?
+  redeemedCount  Int       @default(0)
+  active         Boolean   @default(true)
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  createdById    String?
+
+  redemptions PromoRedemption[]
+
+  @@index([active, code])
+}
+
+model PromoRedemption {
+  id        String   @id @default(cuid())
+  codeId    String
+  tenantId  String
+  usedAt    DateTime @default(now())
+
+  code   PromoCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([codeId, tenantId])
+  @@index([tenantId])
 }

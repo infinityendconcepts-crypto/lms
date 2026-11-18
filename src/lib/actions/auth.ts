@@ -17,7 +17,15 @@ import {
 import { hashPassword, newToken, tokenHash } from "@/lib/password";
 import { audit } from "@/lib/audit";
 import { appUrl, sendEmail } from "@/lib/email";
-import { TRIAL_DAYS } from "@/lib/plans";
+import {
+  DEFAULT_CURRENCY,
+  PLANS,
+  TRIAL_DAYS,
+  priceFor,
+  type PlanId,
+} from "@/lib/plans";
+import { getPlan } from "@/lib/plan-catalog";
+import { normalizePromoCode, recordPromoRedemption, resolvePromo } from "@/lib/promos";
 import { randomSuffix, slugify } from "@/lib/utils";
 
 export type AuthState = { error?: string; success?: string; devLink?: string } | null;
@@ -90,7 +98,18 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
   }
 
   const passwordHash = await hashPassword(parsedPassword.data);
-  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 86_400_000);
+  const requestedPlan = String(formData.get("plan") ?? "GROWTH") as PlanId;
+  const plan = requestedPlan in PLANS ? await getPlan(requestedPlan) : await getPlan("GROWTH");
+  const code = normalizePromoCode(String(formData.get("promoCode") ?? ""));
+  const { promo, error: promoError } = code
+    ? await resolvePromo(code, plan, DEFAULT_CURRENCY)
+    : { promo: undefined, error: undefined };
+  if (promoError) return { error: promoError };
+
+  const trialDays = promo?.trialDays && promo.trialDays > 0 ? promo.trialDays : TRIAL_DAYS;
+  const trialEndsAt = new Date(Date.now() + trialDays * 86_400_000);
+  const seats = plan.seats === null ? 999_999 : plan.seats + (promo?.seatBoost ?? 0);
+  const effectivePrice = promo?.effectivePrice ?? priceFor(plan, DEFAULT_CURRENCY);
 
   const user = await db.user.create({
     data: {
@@ -112,10 +131,12 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
               trialEndsAt,
               subscription: {
                 create: {
-                  plan: "GROWTH",
-                  seats: 400,
+                  plan: plan.id,
+                  seats,
                   status: "TRIALING",
                   currentPeriodEnd: trialEndsAt,
+                  promoCode: promo?.code ?? null,
+                  effectivePrice,
                 },
               },
             },
@@ -127,12 +148,18 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
   });
 
   const tenantId = user.memberships[0]?.tenantId;
+  if (promo && tenantId) await recordPromoRedemption(promo.id, tenantId);
   await createSession(user.id);
   if (tenantId) {
     const jar = await cookies();
     jar.set(TENANT_COOKIE, tenantId, cookieOptions);
   }
-  await audit({ tenantId, actorId: user.id, action: "workspace.created", meta: { kind } });
+  await audit({
+    tenantId,
+    actorId: user.id,
+    action: "workspace.created",
+    meta: { kind, plan: plan.id, promoCode: promo?.code ?? null },
+  });
   await sendEmail({
     to: email,
     tenantId,

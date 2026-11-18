@@ -16,7 +16,9 @@ import { canTeach, requireTenant } from "@/lib/tenant";
 import { markLessonCompleteAction } from "@/lib/actions/course";
 import { SubmitButton } from "@/components/SubmitButton";
 import { MathText } from "@/components/MathText";
+import { LessonVideoEmbed, UploadedVideoPlayer } from "@/components/VideoPlayer";
 import { formatBytes } from "@/lib/storage";
+import { parseVideoEmbed } from "@/lib/video-link";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Lesson" };
@@ -97,15 +99,29 @@ export default async function LearnLessonPage({
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{lesson.title}</h1>
         {lesson.summary && <p className="mt-1 text-sm leading-6 text-slate-500">{lesson.summary}</p>}
 
-        {lesson.meetingUrl && (
-          <a
-            href={lesson.meetingUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 flex items-center gap-2 rounded-2xl border border-brand-200 bg-brand-50/70 px-4 py-3 text-sm font-semibold text-brand-800 hover:bg-brand-50"
-          >
-            <Video className="size-4" /> Join the live session
-          </a>
+        {lesson.meetingUrl && parseVideoEmbed(lesson.meetingUrl) ? (
+          <LessonVideoEmbed url={lesson.meetingUrl} />
+        ) : (
+          lesson.meetingUrl && (
+            <a
+              href={lesson.meetingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 flex items-center gap-2 rounded-2xl border border-brand-200 bg-brand-50/70 px-4 py-3 text-sm font-semibold text-brand-800 hover:bg-brand-50"
+            >
+              <Video className="size-4" /> Open lesson link
+            </a>
+          )
+        )}
+
+        {lesson.attachments.some((file) => file.kind === "video") && (
+          <section className="mt-5 space-y-4">
+            {lesson.attachments
+              .filter((file) => file.kind === "video")
+              .map((file) => (
+                <UploadedVideoPlayer key={file.id} attachmentId={file.id} name={file.name} />
+              ))}
+          </section>
         )}
 
         <article className="card mt-5 px-5 py-6 sm:px-8 sm:py-8">
@@ -116,16 +132,18 @@ export default async function LearnLessonPage({
           )}
         </article>
 
-        {lesson.attachments.length > 0 && (
+        {lesson.attachments.some((file) => file.kind !== "video") && (
           <section className="card mt-5 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
               <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                 <FileText className="size-3.5" /> Lesson files
               </h2>
-              <span className="text-[11px] text-slate-400">{lesson.attachments.length}</span>
+              <span className="text-[11px] text-slate-400">
+                {lesson.attachments.filter((file) => file.kind !== "video").length}
+              </span>
             </div>
             <ul className="divide-y divide-slate-100">
-              {lesson.attachments.map((file) => (
+              {lesson.attachments.filter((file) => file.kind !== "video").map((file) => (
                 <li key={file.id}>
                   <a
                     href={`/api/files/${file.id}`}

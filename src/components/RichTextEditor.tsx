@@ -46,6 +46,27 @@ export function MathToolbar({
   );
 }
 
+/**
+ * Set a form field's value from outside a controlled component (used by the AI
+ * assist panel to fill the summary and content editors). Uses the native value
+ * setter so React's change tracking picks it up.
+ */
+export function setFormFieldValue(name: string, value: string) {
+  if (typeof document === "undefined") return false;
+  const el = document.querySelector(`[name="${CSS.escape(name)}"]`) as
+    | HTMLInputElement
+    | HTMLTextAreaElement
+    | null;
+  if (!el) return false;
+  const proto =
+    el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  setter?.call(el, value);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
 export function RichTextEditor({
   name,
   defaultValue = "",

@@ -12,7 +12,16 @@ import { assertSeatAvailable } from "@/lib/usage";
 import { audit } from "@/lib/audit";
 import { appUrl, sendEmail } from "@/lib/email";
 import { randomSuffix, slugify } from "@/lib/utils";
-import { TRIAL_DAYS, currencyFor } from "@/lib/plans";
+import {
+  DEFAULT_CURRENCY,
+  PLANS,
+  TRIAL_DAYS,
+  currencyFor,
+  priceFor,
+  type PlanId,
+} from "@/lib/plans";
+import { getPlan } from "@/lib/plan-catalog";
+import { normalizePromoCode, recordPromoRedemption, resolvePromo } from "@/lib/promos";
 
 const COOKIE = {
   httpOnly: true,
@@ -72,7 +81,7 @@ export async function inviteMemberAction(formData: FormData) {
   const email = z.string().trim().toLowerCase().email().safeParse(formData.get("email"));
   const role = String(formData.get("role") ?? "STUDENT") as Role;
   const courseId = String(formData.get("courseId") ?? "") || null;
-  const allowed: Role[] = ["ADMIN", "TEACHER", "STUDENT"];
+  const allowed: Role[] = ["ADMIN", "TEACHER", "MODERATOR", "STUDENT"];
 
   if (!email.success) redirect("/dashboard/settings?tab=members&error=Enter+a+valid+email");
   if (!allowed.includes(role)) redirect("/dashboard/settings?tab=members&error=Invalid+role");
@@ -155,7 +164,7 @@ export async function changeRoleAction(formData: FormData) {
   const ctx = await requireTenant("ADMIN");
   const membershipId = String(formData.get("membershipId") ?? "");
   const role = String(formData.get("role") ?? "") as Role;
-  if (!["ADMIN", "TEACHER", "STUDENT"].includes(role)) return;
+  if (!["ADMIN", "TEACHER", "MODERATOR", "STUDENT"].includes(role)) return;
 
   const target = await db.membership.findFirst({
     where: { id: membershipId, tenantId: ctx.tenant.id },
@@ -314,7 +323,18 @@ export async function createWorkspaceAction(formData: FormData) {
     if (!clash) break;
     slug = `${base}-${randomSuffix()}`;
   }
-  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 86_400_000);
+  const requestedPlan = String(formData.get("plan") ?? "GROWTH") as PlanId;
+  const plan = requestedPlan in PLANS ? await getPlan(requestedPlan) : await getPlan("GROWTH");
+  const code = normalizePromoCode(String(formData.get("promoCode") ?? ""));
+  const { promo, error } = code
+    ? await resolvePromo(code, plan, DEFAULT_CURRENCY)
+    : { promo: undefined, error: undefined };
+  if (error) redirect(`/onboarding?error=${encodeURIComponent(error)}`);
+
+  const trialDays = promo?.trialDays && promo.trialDays > 0 ? promo.trialDays : TRIAL_DAYS;
+  const trialEndsAt = new Date(Date.now() + trialDays * 86_400_000);
+  const seats = plan.seats === null ? 999_999 : plan.seats + (promo?.seatBoost ?? 0);
+  const effectivePrice = promo?.effectivePrice ?? priceFor(plan, DEFAULT_CURRENCY);
 
   const tenant = await db.tenant.create({
     data: {
@@ -324,16 +344,24 @@ export async function createWorkspaceAction(formData: FormData) {
       trialEndsAt,
       subscription: {
         create: {
-          plan: "GROWTH",
-          seats: 400,
+          plan: plan.id,
+          seats,
           status: "TRIALING",
           currentPeriodEnd: trialEndsAt,
+          promoCode: promo?.code ?? null,
+          effectivePrice,
         },
       },
       memberships: { create: { userId: session.user.id, role: "OWNER" } },
     },
   });
-  await audit({ tenantId: tenant.id, actorId: session.user.id, action: "workspace.created" });
+  if (promo) await recordPromoRedemption(promo.id, tenant.id);
+  await audit({
+    tenantId: tenant.id,
+    actorId: session.user.id,
+    action: "workspace.created",
+    meta: { plan: plan.id, promoCode: promo?.code ?? null },
+  });
   const jar = await cookies();
   jar.set(TENANT_COOKIE, tenant.id, COOKIE);
   revalidatePath("/dashboard", "layout");

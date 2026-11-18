@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireTenant } from "@/lib/tenant";
-import { PLANS, type PlanId } from "@/lib/plans";
+import { PLANS, currencyFor, priceFor, type PlanId } from "@/lib/plans";
+import { getPlan } from "@/lib/plan-catalog";
+import { normalizePromoCode, recordPromoRedemption, resolvePromo } from "@/lib/promos";
 import { audit } from "@/lib/audit";
 
 /**
@@ -16,37 +18,54 @@ export async function selectPlanAction(formData: FormData) {
   const planId = String(formData.get("plan") ?? "") as PlanId;
   if (!(planId in PLANS)) redirect("/dashboard/billing?error=Unknown+plan");
 
-  const plan = PLANS[planId];
+  const plan = await getPlan(planId);
+  const currency = currencyFor(ctx.tenant.currency);
+  const code = normalizePromoCode(String(formData.get("promoCode") ?? ""));
+  const { promo, error } = code
+    ? await resolvePromo(code, plan, currency)
+    : { promo: undefined, error: undefined };
+  if (error) redirect(`/dashboard/billing?error=${encodeURIComponent(error)}`);
+
+  const seats = plan.seats === null ? 999_999 : plan.seats + (promo?.seatBoost ?? 0);
+  const days = promo?.trialDays && promo.trialDays > 0 ? promo.trialDays : 30;
+  const periodEnd = new Date(Date.now() + days * 86_400_000);
+  const effectivePrice = promo?.effectivePrice ?? priceFor(plan, currency);
+
   await db.subscription.upsert({
     where: { tenantId: ctx.tenant.id },
     create: {
       tenantId: ctx.tenant.id,
       plan: plan.id,
-      seats: plan.seats ?? 999_999,
+      seats,
       status: "ACTIVE",
-      currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000),
+      currentPeriodEnd: periodEnd,
+      promoCode: promo?.code ?? null,
+      effectivePrice,
     },
     update: {
       plan: plan.id,
-      seats: plan.seats ?? 999_999,
+      seats,
       status: "ACTIVE",
       cancelAtPeriodEnd: false,
-      currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000),
+      currentPeriodEnd: periodEnd,
+      promoCode: promo?.code ?? null,
+      effectivePrice,
     },
   });
   await db.tenant.update({
     where: { id: ctx.tenant.id },
-    data: { trialEndsAt: null },
+    data: { trialEndsAt: promo?.trialDays ? periodEnd : null },
   });
+  if (promo) await recordPromoRedemption(promo.id, ctx.tenant.id);
   await audit({
     tenantId: ctx.tenant.id,
     actorId: ctx.user.id,
     action: "billing.plan_selected",
     target: plan.id,
-    meta: { seats: plan.seats, price: plan.price },
+    meta: { seats, price: effectivePrice, currency, promoCode: promo?.code ?? null },
   });
   revalidatePath("/dashboard/billing");
-  redirect(`/dashboard/billing?upgraded=${plan.id}`);
+  redirect(`/dashboard/billing?upgraded=${plan.id}${promo ? `&promo=${promo.code}` : ""}`);
 }
 
 export async function cancelPlanAction(formData: FormData) {

@@ -22,6 +22,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { UploadField } from "@/components/UploadField";
 import { MathText } from "@/components/MathText";
+import { AiContentAssist } from "@/components/ai/AiContentAssist";
+import { providerOptions } from "@/lib/ai/benchmark";
 import { formatBytes } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
 
@@ -51,6 +53,7 @@ export default async function LessonEditorPage({
   const index = lesson.course.lessons.findIndex((l) => l.id === lesson.id);
   const previous = index > 0 ? lesson.course.lessons[index - 1] : null;
   const next = index >= 0 ? lesson.course.lessons[index + 1] : null;
+  const aiProviders = await providerOptions(ctx.tenant.id);
 
   return (
     <div>
@@ -157,16 +160,19 @@ export default async function LessonEditorPage({
                 </div>
                 <div>
                   <label className="label" htmlFor="lesson-meeting">
-                    Live meeting URL
+                    Video or meeting URL
                   </label>
                   <input
                     id="lesson-meeting"
                     name="meetingUrl"
                     type="url"
                     defaultValue={lesson.meetingUrl ?? ""}
-                    placeholder="https://meet…"
+                    placeholder="https://youtube.com/watch?v=… or https://meet…"
                     className="input"
                   />
+                  <p className="mt-1 text-[9px] leading-3 text-slate-400">
+                    YouTube and Vimeo links play inline; other links open as a join button.
+                  </p>
                 </div>
               </div>
             </div>
@@ -266,6 +272,21 @@ export default async function LessonEditorPage({
         </div>
 
         <aside className="space-y-4">
+          <AiContentAssist
+            lessonId={lesson.id}
+            courseId={lesson.courseId}
+            attachments={lesson.attachments.map((file) => ({
+              id: file.id,
+              name: file.name,
+              kind: file.kind,
+            }))}
+            providerOptions={aiProviders.map((option) => ({
+              value: option.value,
+              label: option.label,
+              detail: option.detail,
+            }))}
+          />
+
           <div className="card p-5">
             <h2 className="text-sm font-bold text-slate-900">Lesson preview</h2>
             <p className="mt-1 text-[11px] text-slate-500">

@@ -2,10 +2,20 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
-import { PLANS, currencyFor, type PlanId } from "@/lib/plans";
+import {
+  CURRENCIES,
+  PLANS,
+  currencyFor,
+  type Currency,
+  type PlanId,
+  type PlanOverrides,
+} from "@/lib/plans";
+import { getPlan, PLAN_SETTING_KEY } from "@/lib/plan-catalog";
+import { PROMO_KINDS, normalizePromoCode } from "@/lib/promos";
 import { nowMs, randomSuffix, slugify } from "@/lib/utils";
 
 const SUBSCRIPTION_STATUSES = ["TRIALING", "ACTIVE", "PAST_DUE", "CANCELED"] as const;
@@ -65,7 +75,7 @@ export async function createAdminWorkspaceAction(formData: FormData) {
     : { id: session.user.id, email: session.user.email };
   if (!owner) redirect("/admin?error=No+user+found+with+that+owner+email");
 
-  const plan = PLANS[planId];
+  const plan = await getPlan(planId);
   const startsAt = nowMs();
   const trialEndsAt = statusRaw === "TRIALING" ? new Date(startsAt + 14 * 86_400_000) : null;
   const currentPeriodEnd =
@@ -162,7 +172,7 @@ export async function updateSubscriptionAction(formData: FormData) {
   const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
   if (!tenant) redirect("/admin?error=Workspace+not+found");
 
-  const plan = PLANS[planId];
+  const plan = await getPlan(planId);
   const seatsRaw = String(formData.get("seats") ?? "").trim();
   const seats = seatsRaw ? Math.floor(Number(seatsRaw)) : (plan.seats ?? 999_999);
   if (!Number.isFinite(seats) || seats < 1 || seats > 1_000_000) {
@@ -231,7 +241,7 @@ export async function updateTenantPlanAction(formData: FormData) {
   const status = String(formData.get("status") ?? "ACTIVE");
   if (!(planId in PLANS)) redirect("/admin?error=Unknown+plan");
 
-  const plan = PLANS[planId];
+  const plan = await getPlan(planId);
   await db.subscription.upsert({
     where: { tenantId },
     create: {
@@ -300,4 +310,182 @@ export async function toggleSuperAdminAction(formData: FormData) {
   });
   revalidatePath("/admin");
   redirect("/admin?saved=Super+admin+access+updated");
+}
+
+const PLAN_IDS = Object.keys(PLANS) as PlanId[];
+
+function adminNumber(formData: FormData, key: string, fallback: number) {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function adminLimit(formData: FormData, key: string, fallback: number | null) {
+  const raw = String(formData.get(key) ?? "").trim().toLowerCase();
+  if (!raw) return fallback;
+  if (raw === "unlimited" || raw === "-1") return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 1 ? Math.floor(value) : fallback;
+}
+
+/** Replace the stored plan overrides. Built-in plans remain the fallback. */
+export async function savePlanDefinitionsAction(formData: FormData) {
+  const session = await requireSuperAdmin();
+
+  const overrides: PlanOverrides = {};
+  for (const id of PLAN_IDS) {
+    const name = String(formData.get(`${id}_name`) ?? "").trim().slice(0, 60);
+    const tagline = String(formData.get(`${id}_tagline`) ?? "").trim().slice(0, 240);
+    if (!name || !tagline) redirect("/admin?error=Plan+name+and+tagline+are+required");
+
+    const prices: Partial<Record<Currency, number>> = {};
+    for (const code of CURRENCIES) {
+      const raw = String(formData.get(`${id}_price_${code}`) ?? "").trim();
+      if (!raw) continue;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0 || value > 1_000_000) {
+        redirect(`/admin?error=Invalid+${code}+price+for+${id}`);
+      }
+      prices[code] = value;
+    }
+
+    const features = String(formData.get(`${id}_features`) ?? "")
+      .split("\n")
+      .map((line) => line.trim().slice(0, 160))
+      .filter(Boolean)
+      .slice(0, 12);
+    if (features.length === 0) redirect(`/admin?error=${id}+needs+at+least+one+feature`);
+
+    overrides[id] = {
+      name,
+      tagline,
+      price: adminNumber(formData, `${id}_price`, PLANS[id].price),
+      prices,
+      seats: adminLimit(formData, `${id}_seats`, PLANS[id].seats),
+      courses: adminLimit(formData, `${id}_courses`, PLANS[id].courses),
+      storageMb: Math.max(1, Math.floor(adminNumber(formData, `${id}_storageMb`, PLANS[id].storageMb))),
+      customBranding: formData.get(`${id}_customBranding`) === "on",
+      api: formData.get(`${id}_api`) === "on",
+      sso: formData.get(`${id}_sso`) === "on",
+      features,
+    };
+  }
+
+  // Reject anything that would fail the read-time validator before persisting.
+  const validated = z
+    .object({
+      name: z.string().min(1).max(60),
+      tagline: z.string().max(240),
+      price: z.number().min(0).max(1_000_000),
+      prices: z.record(z.string(), z.number().min(0).max(1_000_000)),
+      seats: z.number().int().min(1).max(10_000_000).nullable(),
+      courses: z.number().int().min(1).max(10_000_000).nullable(),
+      storageMb: z.number().int().min(1).max(10_000_000),
+      customBranding: z.boolean(),
+      api: z.boolean(),
+      sso: z.boolean(),
+      features: z.array(z.string().min(1).max(160)).max(12),
+    })
+    .safeParse(overrides.GROWTH);
+  if (!validated.success) redirect("/admin?error=Plan+details+are+not+valid");
+
+  await db.platformSetting.upsert({
+    where: { key: PLAN_SETTING_KEY },
+    create: { key: PLAN_SETTING_KEY, value: JSON.stringify(overrides) },
+    update: { value: JSON.stringify(overrides) },
+  });
+  await audit({
+    actorId: session.user.id,
+    action: "admin.plans.updated",
+    target: PLAN_SETTING_KEY,
+    meta: { plans: PLAN_IDS },
+  });
+  revalidatePath("/admin");
+  revalidatePath("/dashboard/billing");
+  revalidatePath("/");
+  redirect("/admin?saved=Plans+updated");
+}
+
+export async function createPromoCodeAction(formData: FormData) {
+  const session = await requireSuperAdmin();
+  const code = normalizePromoCode(String(formData.get("code") ?? ""));
+  const planRaw = String(formData.get("planId") ?? "").trim();
+  const kind = String(formData.get("kind") ?? "PERCENT");
+  const value = Number(formData.get("value"));
+  const planId = planRaw && planRaw in PLANS ? (planRaw as PlanId) : null;
+  const trialDaysRaw = String(formData.get("trialDays") ?? "").trim();
+  const seatBoostRaw = String(formData.get("seatBoost") ?? "").trim();
+  const maxRaw = String(formData.get("maxRedemptions") ?? "").trim();
+  const expiresRaw = String(formData.get("expiresAt") ?? "").trim();
+  const expiresAt = parseAdminDate(expiresRaw);
+
+  if (!/^[A-Z0-9_-]{3,32}$/.test(code)) redirect("/admin?error=Promo+codes+use+3-32+letters%2C+numbers%2C+_or+-");
+  if (!(PROMO_KINDS as readonly string[]).includes(kind)) redirect("/admin?error=Unknown+promo+type");
+  if (!Number.isFinite(value) || value <= 0 || (kind === "PERCENT" && value > 100)) {
+    redirect("/admin?error=Invalid+promo+value");
+  }
+  if (expiresRaw && !expiresAt) redirect("/admin?error=Promo+expiry+date+is+not+valid");
+  if (planRaw && !planId) redirect("/admin?error=Unknown+plan+for+promo");
+
+  const optionalInt = (raw: string, max: number) => {
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= max ? Math.floor(parsed) : null;
+  };
+
+  if (await db.promoCode.findUnique({ where: { code }, select: { id: true } })) {
+    redirect("/admin?error=That+promo+code+already+exists");
+  }
+
+  await db.promoCode.create({
+    data: {
+      code,
+      planId,
+      kind,
+      value,
+      trialDays: optionalInt(trialDaysRaw, 365),
+      seatBoost: optionalInt(seatBoostRaw, 100_000),
+      maxRedemptions: maxRaw ? optionalInt(maxRaw, 1_000_000) : null,
+      expiresAt,
+      active: formData.get("active") === "on",
+      createdById: session.user.id,
+    },
+  });
+  await audit({
+    actorId: session.user.id,
+    action: "admin.promo.created",
+    target: code,
+    meta: { planId, kind, value },
+  });
+  revalidatePath("/admin");
+  redirect(`/admin?saved=Promo+${encodeURIComponent(code)}+created`);
+}
+
+export async function togglePromoCodeAction(formData: FormData) {
+  const session = await requireSuperAdmin();
+  const id = String(formData.get("promoId") ?? "");
+  const promo = await db.promoCode.findUnique({ where: { id } });
+  if (!promo) redirect("/admin?error=Promo+not+found");
+
+  await db.promoCode.update({ where: { id }, data: { active: !promo.active } });
+  await audit({
+    actorId: session.user.id,
+    action: promo.active ? "admin.promo.paused" : "admin.promo.activated",
+    target: promo.code,
+  });
+  revalidatePath("/admin");
+  redirect("/admin?saved=Promo+status+updated");
+}
+
+export async function deletePromoCodeAction(formData: FormData) {
+  const session = await requireSuperAdmin();
+  const id = String(formData.get("promoId") ?? "");
+  const promo = await db.promoCode.findUnique({ where: { id }, select: { code: true } });
+  if (!promo) redirect("/admin?error=Promo+not+found");
+
+  await db.promoCode.delete({ where: { id } });
+  await audit({ actorId: session.user.id, action: "admin.promo.deleted", target: promo.code });
+  revalidatePath("/admin");
+  redirect("/admin?saved=Promo+deleted");
 }

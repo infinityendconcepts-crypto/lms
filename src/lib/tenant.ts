@@ -6,9 +6,15 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getSession, TENANT_COOKIE } from "@/lib/auth";
 
-export type Role = "OWNER" | "ADMIN" | "TEACHER" | "STUDENT";
+export type Role = "OWNER" | "ADMIN" | "TEACHER" | "MODERATOR" | "STUDENT";
 
-const RANK: Record<Role, number> = { STUDENT: 1, TEACHER: 2, ADMIN: 3, OWNER: 4 };
+const RANK: Record<Role, number> = {
+  STUDENT: 1,
+  MODERATOR: 2,
+  TEACHER: 3,
+  ADMIN: 4,
+  OWNER: 5,
+};
 
 export function atLeast(role: string, min: Role) {
   return (RANK[role as Role] ?? 0) >= RANK[min];
@@ -20,6 +26,11 @@ export function canTeach(role: string) {
 
 export function canAdmin(role: string) {
   return atLeast(role, "ADMIN");
+}
+
+/** Moderators review submitted work but do not build courses or manage billing. */
+export function canModerate(role: string) {
+  return atLeast(role, "MODERATOR");
 }
 
 export const getAppContext = cache(async () => {
@@ -78,5 +89,9 @@ export const ROLE_LABELS: Record<Role, string> = {
   OWNER: "Owner",
   ADMIN: "Admin",
   TEACHER: "Teacher",
+  MODERATOR: "Moderator",
   STUDENT: "Student",
 };
+
+/** Roles that make up a workspace's staff (everyone who is not a learner). */
+export const STAFF_ROLES: Role[] = ["OWNER", "ADMIN", "TEACHER", "MODERATOR"];

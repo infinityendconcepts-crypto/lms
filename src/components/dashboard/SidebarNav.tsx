@@ -15,6 +15,7 @@ import {
   Library,
   Settings,
   ShieldAlert,
+  ShieldCheck,
   Users,
   Wallet,
 } from "lucide-react";
@@ -33,7 +34,13 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
   const teacher = ["OWNER", "ADMIN", "TEACHER"].includes(role);
+  const moderator = ["OWNER", "ADMIN", "TEACHER", "MODERATOR"].includes(role);
   const admin = ["OWNER", "ADMIN"].includes(role);
+  const moderationItem: Item = {
+    href: "/dashboard/moderation",
+    label: "Moderation",
+    icon: ShieldCheck,
+  };
 
   const groups: { label: string; items: Item[] }[] = [];
 
@@ -46,6 +53,7 @@ export function SidebarNav({
         { href: "/dashboard/assessments", label: "Assessments", icon: ClipboardCheck },
         { href: "/dashboard/bank", label: "Question bank", icon: Library },
         { href: "/dashboard/grading", label: "Grading queue", icon: GraduationCap },
+        moderationItem,
       ],
     });
     groups.push({
@@ -56,6 +64,14 @@ export function SidebarNav({
         { href: "/dashboard/insights", label: "Success insights", icon: BrainCircuit },
         { href: "/dashboard/reporting", label: "Reporting", icon: FileBarChart },
         { href: "/dashboard/gradebook", label: "Gradebook", icon: BarChart3 },
+      ],
+    });
+  } else if (moderator) {
+    groups.push({
+      label: "Staff",
+      items: [
+        { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+        moderationItem,
       ],
     });
   } else {

@@ -1,7 +1,8 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import { planFor, trialDaysLeft } from "@/lib/plans";
+import { trialDaysLeft } from "@/lib/plans";
+import { getPlan } from "@/lib/plan-catalog";
 
 export async function getUsage(tenantId: string) {
   const [students, teachers, courses, assessments, storage, submissions] = await Promise.all([
@@ -31,9 +32,11 @@ export async function getPlanState(tenantId: string) {
   if (!tenant) throw new Error("Workspace not found");
 
   const sub = tenant.subscription;
-  const plan = planFor(sub?.plan ?? "STARTER");
+  const plan = await getPlan(sub?.plan ?? "STARTER");
   const trialLeft = sub?.status === "TRIALING" ? trialDaysLeft(sub.currentPeriodEnd) : 0;
   const usage = await getUsage(tenantId);
+  // A saved seat override (admin or promo seat boost) applies to finite plans.
+  const seatLimit = plan.seats === null ? null : sub?.seats ?? plan.seats;
 
   return {
     tenant,
@@ -41,9 +44,9 @@ export async function getPlanState(tenantId: string) {
     plan,
     trialLeft,
     usage,
-    seatLimit: plan.seats,
-    seatsLeft: plan.seats === null ? null : Math.max(0, plan.seats - usage.students),
-    overSeats: plan.seats !== null && usage.students >= plan.seats,
+    seatLimit,
+    seatsLeft: seatLimit === null ? null : Math.max(0, seatLimit - usage.students),
+    overSeats: seatLimit !== null && usage.students >= seatLimit,
   };
 }
 

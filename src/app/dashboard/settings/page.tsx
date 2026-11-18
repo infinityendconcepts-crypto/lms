@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  UserCog,
   Trash2,
   UserPlus,
   Users,
@@ -63,8 +64,10 @@ export default async function SettingsPage({
   const admin = canAdmin(ctx.role);
   const teacher = canTeach(ctx.role);
   const tab =
-    sp.tab === "members" || sp.tab === "inbox" || sp.tab === "ai" ? sp.tab : "workspace";
-  if ((tab === "members" || tab === "inbox" || tab === "ai") && !admin) {
+    sp.tab === "staff" || sp.tab === "members" || sp.tab === "inbox" || sp.tab === "ai"
+      ? sp.tab
+      : "workspace";
+  if ((tab === "staff" || tab === "members" || tab === "inbox" || tab === "ai") && !admin) {
     // Students and teachers can still see the workspace tab.
     return (
       <div>
@@ -181,6 +184,13 @@ export default async function SettingsPage({
           { href: "/dashboard/settings", label: "Workspace" },
           ...(admin
             ? [
+                {
+                  href: "/dashboard/settings?tab=staff",
+                  label: "Staff",
+                  count: memberships.filter((m) =>
+                    ["OWNER", "ADMIN", "TEACHER", "MODERATOR"].includes(m.role)
+                  ).length,
+                },
                 {
                   href: "/dashboard/settings?tab=members",
                   label: "Members",
@@ -403,10 +413,113 @@ export default async function SettingsPage({
                   <li><b>Owner</b> — billing, branding, every course and member.</li>
                   <li><b>Admin</b> — manage members, courses and settings.</li>
                   <li><b>Teacher</b> — build courses, assessments and grade.</li>
+                  <li><b>Moderator</b> — review and finalize submitted work.</li>
                   <li><b>Student</b> — learn and submit assessments.</li>
                 </ul>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {tab === "staff" && admin && (
+        <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+          <div className="table-wrap">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-3">
+              <h2 className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                <UserCog className="size-3.5 text-slate-400" /> Workspace staff
+              </h2>
+              <Link href="/dashboard/moderation" className="btn-secondary btn-sm">
+                <ShieldCheck className="size-3.5" /> Open moderation
+              </Link>
+            </div>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  <th>Role</th>
+                  <th>Joined</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {memberships
+                  .filter((m) => ["OWNER", "ADMIN", "TEACHER", "MODERATOR"].includes(m.role))
+                  .map((membership) => {
+                    const protectedRow =
+                      membership.role === "OWNER" || membership.userId === ctx.user.id;
+                    return (
+                      <tr key={membership.id}>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <Avatar name={membership.user.name} src={membership.user.avatarUrl} size="sm" />
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-semibold text-slate-900">
+                                {membership.user.name}
+                              </p>
+                              <p className="truncate text-[10px] text-slate-400">
+                                {membership.user.email}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          {protectedRow ? (
+                            <Badge tone="brand">{ROLE_LABELS[membership.role as Role]}</Badge>
+                          ) : (
+                            <form action={changeRoleAction} className="flex items-center gap-1">
+                              <input type="hidden" name="membershipId" value={membership.id} />
+                              <select
+                                name="role"
+                                defaultValue={membership.role}
+                                className="select !w-28 !px-2 !py-1 text-[11px]"
+                              >
+                                <option value="MODERATOR">Moderator</option>
+                                <option value="TEACHER">Teacher</option>
+                                <option value="ADMIN">Admin</option>
+                              </select>
+                              <SubmitButton variant="ghost" className="btn-sm px-2">
+                                Save
+                              </SubmitButton>
+                            </form>
+                          )}
+                        </td>
+                        <td className="text-[11px] text-slate-500">{formatDate(membership.createdAt)}</td>
+                        <td className="text-right">
+                          {!protectedRow && (
+                            <form action={removeMemberAction}>
+                              <input type="hidden" name="membershipId" value={membership.id} />
+                              <SubmitButton
+                                variant="ghost"
+                                className="btn-sm text-rose-600"
+                                confirm={`Remove ${membership.user.name} from this workspace?`}
+                              >
+                                <Trash2 className="size-3" /> Remove
+                              </SubmitButton>
+                            </form>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="card-pad">
+            <h2 className="text-sm font-bold text-slate-900">What staff can do</h2>
+            <ul className="mt-3 space-y-2 text-[11px] text-slate-600">
+              <li><b>Owner / Admin</b> — manage members, branding, plans and every course.</li>
+              <li><b>Teacher</b> — build courses, assessments, grade and moderate.</li>
+              <li><b>Moderator</b> — review and finalize submitted tasks and exam answers.</li>
+            </ul>
+            <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2.5 text-[10px] leading-4 text-slate-500">
+              Invite or change roles on the Members tab. Moderators appear in the moderation queue
+              straight away.
+            </p>
+            <Link href="/dashboard/settings?tab=members" className="btn-secondary btn-sm mt-3 w-full">
+              Manage all members
+            </Link>
           </div>
         </div>
       )}
@@ -461,6 +574,7 @@ export default async function SettingsPage({
                               className="select !w-28 !px-2 !py-1 text-[11px]"
                             >
                               <option value="STUDENT">Student</option>
+                              <option value="MODERATOR">Moderator</option>
                               <option value="TEACHER">Teacher</option>
                               <option value="ADMIN">Admin</option>
                             </select>
@@ -523,6 +637,7 @@ export default async function SettingsPage({
                     </label>
                     <select id="member-role" name="role" className="select">
                       <option value="STUDENT">Student</option>
+                      <option value="MODERATOR">Moderator</option>
                       <option value="TEACHER">Teacher</option>
                       <option value="ADMIN">Admin</option>
                     </select>

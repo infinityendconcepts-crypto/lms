@@ -14,13 +14,19 @@ import {
   ShieldCheck,
   ShieldOff,
   Sparkles,
+  Tag,
+  Trash2,
   Users,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/tenant";
 import {
   createAdminWorkspaceAction,
+  createPromoCodeAction,
+  deletePromoCodeAction,
   extendTrialAction,
+  savePlanDefinitionsAction,
+  togglePromoCodeAction,
   toggleSuperAdminAction,
   toggleTenantSuspendedAction,
   updateSubscriptionAction,
@@ -36,11 +42,11 @@ import {
   CURRENCIES,
   CURRENCY_LABELS,
   DEFAULT_CURRENCY,
-  PLAN_LIST,
   currencyFor,
-  planFor,
+  priceFor,
   trialDaysLeft,
 } from "@/lib/plans";
+import { getPlanCatalog } from "@/lib/plan-catalog";
 import { formatDate, formatMoney, timeAgo } from "@/lib/utils";
 
 export const metadata = { title: "Platform admin" };
@@ -64,6 +70,8 @@ export default async function AdminPage({
     recentUsers,
     audits,
     outbox,
+    planCatalog,
+    promos,
   ] = await Promise.all([
     db.tenant.findMany({
       include: {
@@ -96,12 +104,20 @@ export default async function AdminPage({
       },
     }),
     db.emailMessage.findMany({ orderBy: { createdAt: "desc" }, take: 8 }),
+    getPlanCatalog(),
+    db.promoCode.findMany({
+      include: { _count: { select: { redemptions: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
+  const plans = Object.values(planCatalog);
 
   const mrrByCurrency = tenants.reduce<Record<string, number>>((sums, tenant) => {
     if (tenant.subscription?.status !== "ACTIVE") return sums;
     const currency = currencyFor(tenant.currency);
-    sums[currency] = (sums[currency] ?? 0) + planFor(tenant.subscription.plan).price;
+    const plan = planCatalog[tenant.subscription.plan as keyof typeof planCatalog] ?? planCatalog.STARTER;
+    sums[currency] =
+      (sums[currency] ?? 0) + (tenant.subscription.effectivePrice ?? priceFor(plan, currency));
     return sums;
   }, {});
   const mrrLabel =
@@ -309,9 +325,10 @@ export default async function AdminPage({
                       Plan
                     </label>
                     <select id="admin-workspace-plan" name="plan" defaultValue="GROWTH" className="select">
-                      {PLAN_LIST.map((plan) => (
+                      {plans.map((plan) => (
                         <option key={plan.id} value={plan.id}>
-                          {plan.name} · {formatMoney(plan.price, DEFAULT_CURRENCY, { decimals: 0 })}/mo
+                          {plan.name} ·{" "}
+                          {formatMoney(priceFor(plan, DEFAULT_CURRENCY), DEFAULT_CURRENCY, { decimals: 0 })}/mo
                         </option>
                       ))}
                     </select>
@@ -335,7 +352,8 @@ export default async function AdminPage({
 
           <div className="space-y-2">
             {tenants.map((tenant) => {
-              const plan = planFor(tenant.subscription?.plan ?? "STARTER");
+              const plan =
+                planCatalog[tenant.subscription?.plan as keyof typeof planCatalog] ?? planCatalog.STARTER;
               const days = trialDaysLeft(tenant.trialEndsAt);
               const showTrial = days > 0 && (tenant.subscription?.status ?? "TRIALING") === "TRIALING";
               return (
@@ -373,7 +391,14 @@ export default async function AdminPage({
                           {tenant._count.assessments} assessments · joined {formatDate(tenant.createdAt)}
                         </p>
                         <p className="mt-0.5 text-[11px] text-slate-400">
-                          {plan.name} · {formatMoney(plan.price, tenant.currency, { decimals: 0 })}/mo ·{" "}
+                          {plan.name} ·{" "}
+                          {formatMoney(
+                            tenant.subscription?.effectivePrice ??
+                              priceFor(plan, currencyFor(tenant.currency)),
+                            currencyFor(tenant.currency),
+                            { decimals: 0 }
+                          )}
+                          /mo ·{" "}
                           {tenant.subscription?.seats ?? plan.seats ?? "∞"} seats
                         </p>
                       </div>
@@ -388,7 +413,7 @@ export default async function AdminPage({
                           className="select h-8 w-28 py-0 text-[11px]"
                           aria-label={`Plan for ${tenant.name}`}
                         >
-                          {PLAN_LIST.map((p) => (
+                          {plans.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name}
                             </option>
@@ -564,7 +589,7 @@ export default async function AdminPage({
                               defaultValue={tenant.subscription?.plan ?? "STARTER"}
                               className="select"
                             >
-                              {PLAN_LIST.map((plan) => (
+                              {plans.map((plan) => (
                                 <option key={plan.id} value={plan.id}>
                                   {plan.name}
                                 </option>
@@ -636,6 +661,277 @@ export default async function AdminPage({
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        <section className="mt-6">
+          <div className="mb-3">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <Tag className="size-4 text-brand-500" /> Plans & promotions
+            </h2>
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              Edit the catalogue for the whole app and issue promo codes. Prices are accounting-only
+              in this demo; no card is charged.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <details className="card overflow-hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 text-xs font-bold text-slate-800 [&::-webkit-details-marker]:hidden">
+                <span>Plan definitions · {plans.length} plans</span>
+                <span className="text-[10px] font-normal text-slate-400">Edit names, prices and limits</span>
+              </summary>
+              <form action={savePlanDefinitionsAction} className="space-y-4 border-t border-slate-100 p-5">
+                {plans.map((plan) => (
+                  <div key={plan.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-bold tracking-wide text-slate-500 uppercase">{plan.id}</p>
+                      <label className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                        <input
+                          type="checkbox"
+                          name={`${plan.id}_customBranding`}
+                          defaultChecked={plan.customBranding}
+                          className="size-3"
+                        />
+                        Branding
+                      </label>
+                      <label className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                        <input type="checkbox" name={`${plan.id}_api`} defaultChecked={plan.api} className="size-3" />
+                        API
+                      </label>
+                      <label className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                        <input type="checkbox" name={`${plan.id}_sso`} defaultChecked={plan.sso} className="size-3" />
+                        SSO
+                      </label>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <label className="label" htmlFor={`${plan.id}_name`}>Name</label>
+                        <input id={`${plan.id}_name`} name={`${plan.id}_name`} defaultValue={plan.name} className="input" />
+                      </div>
+                      <div>
+                        <label className="label" htmlFor={`${plan.id}_price`}>Fallback price</label>
+                        <input
+                          id={`${plan.id}_price`}
+                          name={`${plan.id}_price`}
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          defaultValue={plan.price}
+                          className="input"
+                        />
+                      </div>
+                      <div>
+                        <label className="label" htmlFor={`${plan.id}_seats`}>Learner seats</label>
+                        <input
+                          id={`${plan.id}_seats`}
+                          name={`${plan.id}_seats`}
+                          placeholder="unlimited"
+                          defaultValue={plan.seats === null ? "unlimited" : plan.seats}
+                          className="input"
+                        />
+                      </div>
+                      <div>
+                        <label className="label" htmlFor={`${plan.id}_courses`}>Courses</label>
+                        <input
+                          id={`${plan.id}_courses`}
+                          name={`${plan.id}_courses`}
+                          placeholder="unlimited"
+                          defaultValue={plan.courses === null ? "unlimited" : plan.courses}
+                          className="input"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="label" htmlFor={`${plan.id}_tagline`}>Tagline</label>
+                        <input
+                          id={`${plan.id}_tagline`}
+                          name={`${plan.id}_tagline`}
+                          defaultValue={plan.tagline}
+                          className="input"
+                        />
+                      </div>
+                      <div>
+                        <label className="label" htmlFor={`${plan.id}_storageMb`}>Storage (MB)</label>
+                        <input
+                          id={`${plan.id}_storageMb`}
+                          name={`${plan.id}_storageMb`}
+                          type="number"
+                          min={1}
+                          defaultValue={plan.storageMb}
+                          className="input"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Per-currency prices</label>
+                        <div className="grid grid-cols-4 gap-1">
+                          {CURRENCIES.map((code) => (
+                            <input
+                              key={code}
+                              name={`${plan.id}_price_${code}`}
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              placeholder={code}
+                              defaultValue={plan.prices?.[code] ?? ""}
+                              aria-label={`${plan.name} price in ${code}`}
+                              className="input px-1.5 text-center text-[11px]"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="sm:col-span-2 lg:col-span-4">
+                        <label className="label" htmlFor={`${plan.id}_features`}>
+                          Feature bullets <span className="font-normal text-slate-400">(one per line)</span>
+                        </label>
+                        <textarea
+                          id={`${plan.id}_features`}
+                          name={`${plan.id}_features`}
+                          rows={3}
+                          defaultValue={plan.features.join("\n")}
+                          className="textarea font-sans text-[12px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <SubmitButton pendingText="Saving plans…">Save plan definitions</SubmitButton>
+              </form>
+            </details>
+
+            <details className="card overflow-hidden" open={promos.length === 0}>
+              <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 text-xs font-bold text-slate-800 [&::-webkit-details-marker]:hidden">
+                <span>Promo codes · {promos.length} total</span>
+                <span className="text-[10px] font-normal text-slate-400">Discounts, trials and seat boosts</span>
+              </summary>
+              <div className="border-t border-slate-100 p-5">
+                <form action={createPromoCodeAction} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <label className="label" htmlFor="promo-code">Code</label>
+                    <input id="promo-code" name="code" required placeholder="WELCOME20" className="input uppercase" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="promo-plan">Plan</label>
+                    <select id="promo-plan" name="planId" className="select">
+                      <option value="">All plans</option>
+                      {plans.map((plan) => (
+                        <option key={plan.id} value={plan.id}>{plan.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="promo-kind">Discount type</label>
+                    <select id="promo-kind" name="kind" className="select">
+                      <option value="PERCENT">Percent off (%)</option>
+                      <option value="FIXED">Fixed amount off</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="promo-value">Discount value</label>
+                    <input id="promo-value" name="value" type="number" min={0.01} step="0.01" required className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="promo-trial">Extra trial days</label>
+                    <input id="promo-trial" name="trialDays" type="number" min={0} max={365} placeholder="0" className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="promo-seats">Extra seats</label>
+                    <input id="promo-seats" name="seatBoost" type="number" min={0} placeholder="0" className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="promo-max">Max redemptions</label>
+                    <input id="promo-max" name="maxRedemptions" type="number" min={0} placeholder="Unlimited" className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="promo-expiry">Expires on</label>
+                    <input id="promo-expiry" name="expiresAt" type="date" className="input" />
+                  </div>
+                  <label className="flex items-center gap-2 self-end pb-2 text-[11px] text-slate-600">
+                    <input name="active" type="checkbox" defaultChecked className="size-3.5" /> Active
+                  </label>
+                  <div className="sm:col-span-2 lg:col-span-3 lg:justify-self-end">
+                    <SubmitButton className="w-full" pendingText="Creating…">
+                      <Tag className="size-3.5" /> Create promo code
+                    </SubmitButton>
+                  </div>
+                </form>
+
+                <div className="table-wrap mt-5">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Code</th>
+                        <th>Applies to</th>
+                        <th>Discount</th>
+                        <th>Extras</th>
+                        <th>Redeemed</th>
+                        <th>Expires</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {promos.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-6 text-center text-xs text-slate-400">
+                            No promo codes yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        promos.map((promo) => (
+                          <tr key={promo.id}>
+                            <td>
+                              <span className="font-mono text-xs font-bold text-slate-800">{promo.code}</span>
+                              {!promo.active && <Badge tone="slate">Paused</Badge>}
+                            </td>
+                            <td className="text-[11px] text-slate-600">
+                              {promo.planId ? promo.planId.toLowerCase() : "All plans"}
+                            </td>
+                            <td className="text-[11px] text-slate-600">
+                              {promo.kind === "PERCENT" ? `${promo.value}% off` : `${promo.value} off`}
+                            </td>
+                            <td className="text-[11px] text-slate-600">
+                              {[
+                                promo.trialDays ? `+${promo.trialDays}d trial` : null,
+                                promo.seatBoost ? `+${promo.seatBoost} seats` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ") || "—"}
+                            </td>
+                            <td className="text-[11px] text-slate-600">
+                              {promo._count.redemptions}
+                              {promo.maxRedemptions !== null ? ` / ${promo.maxRedemptions}` : ""}
+                            </td>
+                            <td className="text-[11px] text-slate-500">
+                              {promo.expiresAt ? formatDate(promo.expiresAt) : "Never"}
+                            </td>
+                            <td className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <form action={togglePromoCodeAction}>
+                                  <input type="hidden" name="promoId" value={promo.id} />
+                                  <SubmitButton variant="ghost" className="btn-sm" pendingText="…">
+                                    {promo.active ? "Pause" : "Activate"}
+                                  </SubmitButton>
+                                </form>
+                                <form action={deletePromoCodeAction}>
+                                  <input type="hidden" name="promoId" value={promo.id} />
+                                  <SubmitButton
+                                    variant="ghost"
+                                    className="btn-sm text-rose-600"
+                                    confirm={`Delete promo ${promo.code}?`}
+                                    pendingText="…"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </SubmitButton>
+                                </form>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
           </div>
         </section>
 

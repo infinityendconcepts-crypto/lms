@@ -57,6 +57,8 @@ async function reset() {
   await db.session.deleteMany();
   await db.passwordReset.deleteMany();
   await db.membership.deleteMany();
+  await db.promoRedemption.deleteMany();
+  await db.promoCode.deleteMany();
   await db.subscription.deleteMany();
   await db.tenant.deleteMany();
   await db.user.deleteMany();
@@ -148,6 +150,14 @@ async function main() {
       timezone: "America/New_York",
     },
   });
+  const nadia = await db.user.create({
+    data: {
+      email: "moderator@northfield.edu",
+      name: "Nadia Brooks",
+      passwordHash,
+      timezone: "America/New_York",
+    },
+  });
   const priya = await db.user.create({
     data: {
       email: "student@northfield.edu",
@@ -209,6 +219,7 @@ async function main() {
         create: [
           { userId: elena.id, role: "OWNER" },
           { userId: marcus.id, role: "TEACHER" },
+          { userId: nadia.id, role: "MODERATOR" },
           { userId: priya.id, role: "STUDENT" },
           { userId: jordan.id, role: "STUDENT" },
           { userId: sofia.id, role: "STUDENT" },
@@ -253,6 +264,22 @@ async function main() {
 
   // The super admin belongs to Northfield too, so they can inspect the tenant UI.
   await db.membership.create({ data: { tenantId: northfield.id, userId: admin.id, role: "ADMIN" } });
+
+  // A sample promo to demonstrate the platform-admin promotions panel.
+  await db.promoCode.create({
+    data: {
+      code: "WELCOME20",
+      planId: null,
+      kind: "PERCENT",
+      value: 20,
+      trialDays: 7,
+      seatBoost: 50,
+      maxRedemptions: 100,
+      active: true,
+      expiresAt: days(90),
+      createdById: admin.id,
+    },
+  });
 
   // ── files ────────────────────────────────────────────────────────────────
   const worksheetFile = await seedFile("algebra2-quadratic-worksheet.md", quadraticWorksheet, "text/markdown");
@@ -2578,6 +2605,7 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
   console.log("  Super admin   admin@nkanyezi.dev        / Password123!");
   console.log("  School owner  owner@northfield.edu   / Password123!");
   console.log("  Teacher       teacher@northfield.edu / Password123!");
+  console.log("  Moderator     moderator@northfield.edu / Password123!");
   console.log("  Student       student@northfield.edu / Password123!");
   console.log("  Prospective   ethan@northfield.edu   / Password123! (not enrolled; placement demo)");
   console.log("  Solo teacher  maya@studiomath.io     / Password123!");

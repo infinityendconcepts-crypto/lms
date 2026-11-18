@@ -15,10 +15,14 @@ export function currencyFor(value: string | null | undefined): Currency {
   return CURRENCIES.includes(value as Currency) ? (value as Currency) : DEFAULT_CURRENCY;
 }
 
+export type PlanPrices = Partial<Record<Currency, number>>;
+
 export type Plan = {
   id: PlanId;
   name: string;
+  /** Fallback price, used when a currency has no explicit override. */
   price: number;
+  prices?: PlanPrices;
   tagline: string;
   seats: number | null;
   courses: number | null;
@@ -28,6 +32,10 @@ export type Plan = {
   sso: boolean;
   features: string[];
 };
+
+/** Super-admin edits are stored as partial overrides over these compile-time defaults. */
+export type PlanOverride = Partial<Omit<Plan, "id">>;
+export type PlanOverrides = Partial<Record<PlanId, PlanOverride>>;
 
 export const PLANS: Record<PlanId, Plan> = {
   STARTER: {
@@ -96,6 +104,21 @@ export const PLAN_LIST = Object.values(PLANS);
 
 export function planFor(plan: string): Plan {
   return PLANS[(plan as PlanId) in PLANS ? (plan as PlanId) : "STARTER"];
+}
+
+/** Merge stored platform overrides over the built-in plan catalogue. */
+export function applyPlanOverrides(overrides: PlanOverrides): Record<PlanId, Plan> {
+  const catalog = {} as Record<PlanId, Plan>;
+  for (const id of Object.keys(PLANS) as PlanId[]) {
+    catalog[id] = { ...PLANS[id], ...(overrides[id] ?? {}), id };
+  }
+  return catalog;
+}
+
+export function priceFor(plan: Plan, currency: Currency): number {
+  const override = plan.prices?.[currency];
+  if (typeof override === "number" && Number.isFinite(override)) return override;
+  return plan.price;
 }
 
 export const TRIAL_DAYS = 14;
