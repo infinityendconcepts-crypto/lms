@@ -429,9 +429,14 @@ export default async function SettingsPage({
               <h2 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                 <UserCog className="size-3.5 text-slate-400" /> Workspace staff
               </h2>
-              <Link href="/dashboard/moderation" className="btn-secondary btn-sm">
-                <ShieldCheck className="size-3.5" /> Open moderation
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link href="/dashboard/staff" className="btn-secondary btn-sm">
+                  <UserCog className="size-3.5" /> Full directory
+                </Link>
+                <Link href="/dashboard/moderation" className="btn-secondary btn-sm">
+                  <ShieldCheck className="size-3.5" /> Open moderation
+                </Link>
+              </div>
             </div>
             <table className="table">
               <thead>

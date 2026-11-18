@@ -16,6 +16,7 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
+  UserCog,
   Users,
   Wallet,
 } from "lucide-react";
@@ -41,6 +42,11 @@ export function SidebarNav({
     label: "Moderation",
     icon: ShieldCheck,
   };
+  const staffItem: Item = {
+    href: "/dashboard/staff",
+    label: "Staff",
+    icon: UserCog,
+  };
 
   const groups: { label: string; items: Item[] }[] = [];
 
@@ -59,6 +65,7 @@ export function SidebarNav({
     groups.push({
       label: "People & insight",
       items: [
+        staffItem,
         { href: "/dashboard/students", label: "Learners", icon: Users },
         { href: "/dashboard/attendance", label: "Attendance", icon: CalendarCheck },
         { href: "/dashboard/insights", label: "Success insights", icon: BrainCircuit },
@@ -72,6 +79,7 @@ export function SidebarNav({
       items: [
         { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
         moderationItem,
+        staffItem,
       ],
     });
   } else {

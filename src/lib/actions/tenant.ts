@@ -31,6 +31,17 @@ const COOKIE = {
   maxAge: 30 * 86400,
 };
 
+/** Member forms can send `returnTo` so staff tools keep their own page context. */
+function memberRedirect(formData: FormData, query = ""): never {
+  const raw = String(formData.get("returnTo") ?? "");
+  const base =
+    raw.startsWith("/dashboard/") && !raw.includes("//")
+      ? raw
+      : "/dashboard/settings?tab=members";
+  if (!query) redirect(base);
+  redirect(`${base}${base.includes("?") ? "&" : "?"}${query}`);
+}
+
 export async function switchTenantAction(tenantId: string) {
   const session = await requireUser();
   const membership = await db.membership.findUnique({
@@ -83,8 +94,8 @@ export async function inviteMemberAction(formData: FormData) {
   const courseId = String(formData.get("courseId") ?? "") || null;
   const allowed: Role[] = ["ADMIN", "TEACHER", "MODERATOR", "STUDENT"];
 
-  if (!email.success) redirect("/dashboard/settings?tab=members&error=Enter+a+valid+email");
-  if (!allowed.includes(role)) redirect("/dashboard/settings?tab=members&error=Invalid+role");
+  if (!email.success) memberRedirect(formData, "error=Enter+a+valid+email");
+  if (!allowed.includes(role)) memberRedirect(formData, "error=Invalid+role");
 
   const existingUser = await db.user.findUnique({ where: { email: email.data } });
   if (existingUser) {
@@ -92,7 +103,7 @@ export async function inviteMemberAction(formData: FormData) {
       where: { tenantId_userId: { tenantId: ctx.tenant.id, userId: existingUser.id } },
     });
     if (existing) {
-      redirect("/dashboard/settings?tab=members&error=That+person+is+already+a+member");
+      memberRedirect(formData, "error=That+person+is+already+a+member");
     }
   }
 
@@ -111,7 +122,7 @@ export async function inviteMemberAction(formData: FormData) {
   let course = null;
   if (courseId) {
     course = await db.course.findFirst({ where: { id: courseId, tenantId: ctx.tenant.id } });
-    if (!course) redirect("/dashboard/settings?tab=members&error=Course+not+found");
+    if (!course) memberRedirect(formData, "error=Course+not+found");
   }
 
   await db.invitation.deleteMany({
@@ -148,7 +159,8 @@ export async function inviteMemberAction(formData: FormData) {
   });
 
   revalidatePath("/dashboard/settings");
-  redirect(`/dashboard/settings?tab=members&invited=${encodeURIComponent(email.data)}`);
+  revalidatePath("/dashboard/staff");
+  memberRedirect(formData, `invited=${encodeURIComponent(email.data)}`);
 }
 
 export async function revokeInviteAction(formData: FormData) {
@@ -157,7 +169,8 @@ export async function revokeInviteAction(formData: FormData) {
   await db.invitation.deleteMany({ where: { id, tenantId: ctx.tenant.id } });
   await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id, action: "invitation.revoked" });
   revalidatePath("/dashboard/settings");
-  redirect("/dashboard/settings?tab=members");
+  revalidatePath("/dashboard/staff");
+  memberRedirect(formData);
 }
 
 export async function changeRoleAction(formData: FormData) {
@@ -183,7 +196,8 @@ export async function changeRoleAction(formData: FormData) {
     meta: { role },
   });
   revalidatePath("/dashboard/settings");
-  redirect("/dashboard/settings?tab=members&saved=1");
+  revalidatePath("/dashboard/staff");
+  memberRedirect(formData, "saved=1");
 }
 
 export async function removeMemberAction(formData: FormData) {
@@ -212,7 +226,8 @@ export async function removeMemberAction(formData: FormData) {
     target: target.user.email,
   });
   revalidatePath("/dashboard/settings");
-  redirect("/dashboard/settings?tab=members&removed=1");
+  revalidatePath("/dashboard/staff");
+  memberRedirect(formData, "removed=1");
 }
 
 export type JoinState = { error?: string } | null;
