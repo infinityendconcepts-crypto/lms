@@ -1,0 +1,752 @@
+// Axiom LMS — multi-tenant schema
+// SQLite is used for zero-config local development. For production,
+// switch the provider to "postgresql" (all IDs/enums are string-based).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Identity
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  avatarUrl    String?
+  timezone     String    @default("UTC")
+  isSuperAdmin Boolean   @default(false)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  memberships        Membership[]
+  sessions           Session[]
+  resetTokens        PasswordReset[]
+  invitationsSent    Invitation[]           @relation("Inviter")
+  coursesOwned       Course[]               @relation("CourseOwner")
+  enrollments        Enrollment[]
+  attempts           Attempt[]
+  answersGraded      Answer[]               @relation("Grader")
+  auditLogs          AuditLog[]
+  uploads            Attachment[]
+  attendanceTaken    AttendanceSession[]    @relation("AttendanceCreator")
+  attendanceMarked   AttendanceRecord[]     @relation("AttendanceMarker")
+  attendanceRecords  AttendanceRecord[]     @relation("AttendanceStudent")
+  benchmarkRuns      AiBenchmarkRun[]       @relation("BenchmarkRunner")
+  benchmarks         SuccessBenchmark[]     @relation("StudentBenchmarks")
+  studentProfiles    StudentProfile[]
+  qualifications     LearnerQualification[]
+  codePadSubmissions CodePadSubmission[]
+  codePadsAuthored   CodePad[]              @relation("CodePadAuthor")
+  expensesCreated    CourseExpense[]        @relation("ExpenseCreator")
+  eligibilityChecks  CourseEligibility[]    @relation("EligibilityStudent")
+  eligibilityRuns    CourseEligibility[]    @relation("EligibilityRunner")
+  planTasksAssigned  CoursePlanTask[]       @relation("PlanTaskAssignee")
+  planTasksCreated   CoursePlanTask[]       @relation("PlanTaskAuthor")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// A tenant is a school OR an individual teacher's workspace.
+model Tenant {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  kind        String    @default("SCHOOL") // SCHOOL | TEACHER
+  logoUrl     String?
+  brandColor  String    @default("#4f46e5")
+  headline    String?
+  about       String?
+  website     String?
+  trialEndsAt DateTime?
+  settings    String    @default("{}")
+  createdAt   DateTime  @default(now())
+  suspended   Boolean   @default(false)
+
+  memberships        Membership[]
+  invitations        Invitation[]
+  courses            Course[]
+  enrollments        Enrollment[]
+  assessments        Assessment[]
+  questions          Question[]
+  attempts           Attempt[]
+  attachments        Attachment[]
+  audits             AuditLog[]
+  outbox             EmailMessage[]
+  subscription       Subscription?
+  attendanceSessions AttendanceSession[]
+  aiProviders        AiProviderConfig[]
+  benchmarkRuns      AiBenchmarkRun[]
+  benchmarks         SuccessBenchmark[]
+  studentProfiles    StudentProfile[]
+  qualifications     LearnerQualification[]
+  courseExpenses     CourseExpense[]
+  codePads           CodePad[]
+  eligibilityChecks  CourseEligibility[]
+  planTasks          CoursePlanTask[]
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      String   @default("STUDENT") // OWNER | ADMIN | TEACHER | STUDENT
+  status    String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  tenantId    String
+  email       String
+  role        String    @default("STUDENT")
+  courseId    String?
+  tokenHash   String    @unique
+  invitedById String?
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("Inviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  course    Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, email])
+}
+
+// Dev-friendly email outbox. Swap the sender in src/lib/email.ts for Resend/SES.
+model EmailMessage {
+  id        String    @id @default(cuid())
+  tenantId  String?
+  to        String
+  subject   String
+  body      String
+  kind      String    @default("GENERAL")
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  actorId   String?
+  action    String
+  target    String?
+  meta      String   @default("{}")
+  createdAt DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor  User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Catalog & content
+// ─────────────────────────────────────────────────────────────
+
+model Course {
+  id                String   @id @default(cuid())
+  tenantId          String
+  ownerId           String
+  title             String
+  subtitle          String?
+  description       String   @default("")
+  coverUrl          String?
+  subject           String   @default("Mathematics")
+  level             String   @default("General")
+  status            String   @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  budget            Float?
+  entryRequirements String   @default("")
+  minEntryScore     Int      @default(60)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner              User                @relation("CourseOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  lessons            Lesson[]
+  assessments        Assessment[]
+  enrollments        Enrollment[]
+  invitations        Invitation[]
+  attachments        Attachment[]
+  attendanceSessions AttendanceSession[]
+  benchmarkRuns      AiBenchmarkRun[]
+  benchmarks         SuccessBenchmark[]
+  stages             CourseStage[]
+  expenses           CourseExpense[]
+  codePads           CodePad[]
+  eligibilityChecks  CourseEligibility[]
+  planTasks          CoursePlanTask[]
+
+  @@index([tenantId, status])
+}
+
+model Lesson {
+  id               String   @id @default(cuid())
+  courseId         String
+  stageId          String?
+  title            String
+  summary          String?
+  content          String   @default("")
+  estimatedMinutes Int      @default(15)
+  order            Int      @default(0)
+  published        Boolean  @default(false)
+  meetingUrl       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  stage              CourseStage?        @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  attachments        Attachment[]
+  completions        LessonCompletion[]
+  attendanceSessions AttendanceSession[]
+
+  @@index([courseId, order])
+  @@index([stageId])
+}
+
+model LessonCompletion {
+  id          String   @id @default(cuid())
+  lessonId    String
+  userId      String
+  completedAt DateTime @default(now())
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId])
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  tenantId  String
+  courseId  String
+  userId    String
+  status    String   @default("ACTIVE")
+  progress  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, userId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  courseId     String?
+  lessonId     String?
+  questionId   String?
+  uploadedById String?
+  name         String
+  mimeType     String
+  size         Int
+  storageKey   String
+  kind         String   @default("document") // document | image | video | audio | archive
+  createdAt    DateTime @default(now())
+
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course   Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson   Lesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  uploader User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([lessonId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Assessment engine
+// ─────────────────────────────────────────────────────────────
+
+model Assessment {
+  id              String    @id @default(cuid())
+  tenantId        String
+  courseId        String
+  stageId         String?
+  title           String
+  instructions    String    @default("")
+  type            String    @default("QUIZ") // QUIZ | EXAM | ASSIGNMENT | PLACEMENT
+  status          String    @default("DRAFT") // DRAFT | PUBLISHED | CLOSED
+  timeLimitMin    Int?
+  attemptsAllowed Int       @default(1)
+  passScore       Int       @default(50)
+  randomize       Boolean   @default(false)
+  showResults     String    @default("AFTER_SUBMIT") // AFTER_SUBMIT | AFTER_DUE | MANUAL
+  openAt          DateTime?
+  dueAt           DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course    Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  stage     CourseStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  questions Question[]
+  attempts  Attempt[]
+
+  @@index([tenantId])
+  @@index([courseId])
+  @@index([stageId])
+}
+
+model Question {
+  id           String   @id @default(cuid())
+  tenantId     String
+  assessmentId String?
+  type         String
+  prompt       String
+  mediaUrl     String?
+  points       Float    @default(1)
+  difficulty   String   @default("MEDIUM")
+  tags         String   @default("")
+  data         String   @default("{}")
+  explanation  String?
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assessment Assessment? @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  answers    Answer[]
+
+  @@index([tenantId])
+  @@index([assessmentId, order])
+}
+
+model Attempt {
+  id           String    @id @default(cuid())
+  tenantId     String
+  assessmentId String
+  studentId    String
+  status       String    @default("IN_PROGRESS") // IN_PROGRESS | SUBMITTED | GRADED
+  score        Float?
+  maxScore     Float     @default(0)
+  startedAt    DateTime  @default(now())
+  submittedAt  DateTime?
+  gradedAt     DateTime?
+  gradedById   String?
+  timeSpentSec Int       @default(0)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers    Answer[]
+
+  @@index([tenantId])
+  @@index([assessmentId, studentId])
+  @@index([studentId])
+}
+
+model Answer {
+  id         String    @id @default(cuid())
+  attemptId  String
+  questionId String
+  response   String    @default("{}")
+  score      Float?
+  maxScore   Float     @default(0)
+  feedback   String?
+  gradedById String?
+  gradedAt   DateTime?
+
+  attempt  Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  gradedBy User?    @relation("Grader", fields: [gradedById], references: [id], onDelete: SetNull)
+
+  @@unique([attemptId, questionId])
+  @@index([questionId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Attendance register
+// ─────────────────────────────────────────────────────────────
+
+// One register per class meeting (a course on a given date).
+model AttendanceSession {
+  id          String   @id @default(cuid())
+  tenantId    String
+  courseId    String
+  lessonId    String?
+  title       String?
+  date        DateTime
+  notes       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course    Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson    Lesson?            @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  createdBy User?              @relation("AttendanceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  records   AttendanceRecord[]
+
+  @@index([tenantId, date])
+  @@index([courseId, date])
+}
+
+// A learner's mark within a register.
+model AttendanceRecord {
+  id         String   @id @default(cuid())
+  sessionId  String
+  studentId  String
+  status     String   @default("PRESENT") // PRESENT | ABSENT | LATE | EXCUSED
+  note       String?
+  markedById String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  session  AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student  User              @relation("AttendanceStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  markedBy User?             @relation("AttendanceMarker", fields: [markedById], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// AI success benchmarks
+// ─────────────────────────────────────────────────────────────
+
+// A tenant-configured model endpoint. Keys are encrypted at rest and are
+// never returned to the browser.
+model AiProviderConfig {
+  id            String    @id @default(cuid())
+  tenantId      String
+  provider      String // openai | anthropic | google | groq | openrouter | ...
+  label         String?
+  model         String
+  baseUrl       String?
+  apiKeyEnc     String?
+  apiKeyHint    String?
+  isDefault     Boolean   @default(false)
+  enabled       Boolean   @default(true)
+  lastCheckedAt DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  runs   AiBenchmarkRun[]
+
+  @@unique([tenantId, provider, model])
+  @@index([tenantId])
+}
+
+// One benchmark execution across a cohort. Stores the model used, token
+// usage and any provider error so runs are auditable and comparable.
+model AiBenchmarkRun {
+  id               String   @id @default(cuid())
+  tenantId         String
+  courseId         String?
+  providerConfigId String?
+  provider         String
+  model            String
+  source           String   @default("HEURISTIC") // HEURISTIC | AI
+  status           String   @default("SUCCESS") // SUCCESS | PARTIAL | FAILED
+  studentCount     Int      @default(0)
+  okCount          Int      @default(0)
+  error            String?
+  tokensIn         Int      @default(0)
+  tokensOut        Int      @default(0)
+  latencyMs        Int      @default(0)
+  createdById      String?
+  createdAt        DateTime @default(now())
+
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course         Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  providerConfig AiProviderConfig?  @relation(fields: [providerConfigId], references: [id], onDelete: SetNull)
+  createdBy      User?              @relation("BenchmarkRunner", fields: [createdById], references: [id], onDelete: SetNull)
+  benchmarks     SuccessBenchmark[]
+
+  @@index([tenantId, createdAt])
+  @@index([courseId])
+}
+
+// A per-learner prediction snapshot produced by a benchmark run.
+model SuccessBenchmark {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  runId              String
+  studentId          String
+  courseId           String?
+  successProbability Float
+  confidence         Float    @default(0)
+  riskBand           String   @default("WATCH") // ON_TRACK | WATCH | AT_RISK | CRITICAL
+  headline           String   @default("")
+  summary            String   @default("")
+  drivers            String   @default("[]")
+  recommendations    String   @default("[]")
+  features           String   @default("{}")
+  source             String   @default("HEURISTIC")
+  provider           String   @default("local")
+  model              String   @default("axiom-local-v1")
+  createdAt          DateTime @default(now())
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  run     AiBenchmarkRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  student User           @relation("StudentBenchmarks", fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([studentId, createdAt])
+  @@index([runId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Course structure, operations, coding labs and learner profiles
+// ─────────────────────────────────────────────────────────────
+
+// A stage is one layer of the course organogram (for example "Foundations"
+// or "Application"). Lessons and assessments can be assigned to a stage.
+model CourseStage {
+  id          String   @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  course      Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  assessments Assessment[]
+  planTasks   CoursePlanTask[]
+
+  @@index([courseId, order])
+}
+
+// A delivery task in the course plan. Statuses drive the Kanban columns;
+// start/due dates drive the Gantt timeline.
+model CoursePlanTask {
+  id          String    @id @default(cuid())
+  tenantId    String
+  courseId    String
+  stageId     String?
+  title       String
+  description String?
+  status      String    @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | MET
+  priority    String    @default("MEDIUM") // LOW | MEDIUM | HIGH
+  startAt     DateTime?
+  dueAt       DateTime?
+  completedAt DateTime?
+  order       Int       @default(0)
+  assigneeId  String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course    Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  stage     CourseStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  assignee  User?        @relation("PlanTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy User?        @relation("PlanTaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, courseId])
+  @@index([courseId, status])
+  @@index([courseId, startAt])
+}
+
+// Per-course operating expenses, with an optional course budget.
+model CourseExpense {
+  id          String   @id @default(cuid())
+  tenantId    String
+  courseId    String
+  title       String
+  category    String   @default("OTHER") // MATERIALS | INSTRUCTOR | VENUE | TECHNOLOGY | MARKETING | TRANSPORT | OTHER
+  amount      Float
+  currency    String   @default("USD")
+  vendor      String?
+  incurredAt  DateTime @default(now())
+  notes       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, courseId])
+  @@index([courseId, incurredAt])
+}
+
+// A persistent coding pad attached to a course. Learners can draft, run
+// safe browser previews (HTML/CSS/JS) and submit code for review.
+model CodePad {
+  id          String   @id @default(cuid())
+  tenantId    String
+  courseId    String
+  title       String
+  language    String   @default("javascript")
+  prompt      String   @default("")
+  starterCode String   @default("")
+  solution    String?
+  published   Boolean  @default(false)
+  order       Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course      Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdBy   User?               @relation("CodePadAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  submissions CodePadSubmission[]
+
+  @@index([courseId, order])
+}
+
+model CodePadSubmission {
+  id          String    @id @default(cuid())
+  padId       String
+  userId      String
+  code        String    @default("")
+  status      String    @default("DRAFT") // DRAFT | SUBMITTED | REVIEWED
+  score       Float?
+  feedback    String?
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  pad  CodePad @relation(fields: [padId], references: [id], onDelete: Cascade)
+  user User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([padId, userId])
+  @@index([userId])
+}
+
+// Extended learner record: identity, contact, next of kin and custom fields.
+model StudentProfile {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  userId               String
+  studentNumber        String?
+  legalName            String?
+  dateOfBirth          DateTime?
+  phone                String?
+  address              String?
+  city                 String?
+  country              String?
+  guardianName         String?
+  guardianRelationship String?
+  guardianPhone        String?
+  guardianEmail        String?
+  emergencyNotes       String?
+  customFields         String    @default("[]") // [{ label, value }]
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+}
+
+model LearnerQualification {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String
+  title       String
+  institution String?
+  year        Int?
+  grade       String?
+  documentUrl String?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+}
+
+// A persisted qualification decision for one learner and course. Local
+// heuristics always produce a check; a hosted model can refine the narrative.
+model CourseEligibility {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  courseId           String
+  studentId          String
+  status             String   @default("PROVISIONAL") // QUALIFIED | PROVISIONAL | NOT_QUALIFIED
+  score              Float    @default(0)
+  confidence         Float    @default(0)
+  summary            String   @default("")
+  reasons            String   @default("[]") // [{ label, status, detail }]
+  source             String   @default("HEURISTIC") // HEURISTIC | AI
+  provider           String?
+  model              String?
+  error              String?
+  placementAttemptId String?
+  createdById        String?
+  createdAt          DateTime @default(now())
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student   User   @relation("EligibilityStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("EligibilityRunner", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, studentId, createdAt])
+  @@index([courseId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Commercial
+// ─────────────────────────────────────────────────────────────
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  tenantId             String    @unique
+  plan                 String    @default("STARTER") // STARTER | GROWTH | SCALE
+  seats                Int       @default(50)
+  status               String    @default("ACTIVE") // TRIALING | ACTIVE | PAST_DUE | CANCELED
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}

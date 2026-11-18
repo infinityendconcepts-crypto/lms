@@ -1,0 +1,150 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { db } from "@/lib/db";
+import { requireTenant } from "@/lib/tenant";
+import { autoGradeAttempt, isAttemptExpired } from "@/lib/grading";
+import { audit } from "@/lib/audit";
+
+export async function startAttemptAction(formData: FormData) {
+  const ctx = await requireTenant("STUDENT");
+  const assessmentId = String(formData.get("assessmentId") ?? "");
+
+  const assessment = await db.assessment.findFirst({
+    where: { id: assessmentId, tenantId: ctx.tenant.id },
+    include: { questions: true },
+  });
+  if (!assessment) redirect("/dashboard/courses?error=Assessment+not+found");
+  const isPlacement = assessment.type === "PLACEMENT";
+  const backTo = isPlacement ? `/quiz/${assessmentId}` : `/learn/${assessment.courseId}`;
+  if (assessment.status !== "PUBLISHED") {
+    redirect(`${backTo}?error=This+assessment+is+not+open`);
+  }
+
+  const enrollment = await db.enrollment.findUnique({
+    where: {
+      courseId_userId: { courseId: assessment.courseId, userId: ctx.user.id },
+    },
+  });
+  if (!enrollment && !isPlacement) {
+    redirect("/dashboard/courses?error=Enroll+in+the+course+first");
+  }
+
+  const now = new Date();
+  if (assessment.openAt && assessment.openAt > now) {
+    redirect(`${backTo}?error=This+assessment+has+not+opened+yet`);
+  }
+  if (assessment.dueAt && assessment.dueAt < now) {
+    redirect(`${backTo}?error=The+due+date+has+passed`);
+  }
+
+  const existing = await db.attempt.findFirst({
+    where: { assessmentId, studentId: ctx.user.id, status: "IN_PROGRESS" },
+  });
+  if (existing) redirect(`/attempt/${existing.id}`);
+
+  const used = await db.attempt.count({
+    where: { assessmentId, studentId: ctx.user.id, status: { in: ["SUBMITTED", "GRADED"] } },
+  });
+  if (used >= assessment.attemptsAllowed) {
+    redirect(`${backTo}?error=No+attempts+remaining`);
+  }
+
+  const maxScore = assessment.questions.reduce((sum, q) => sum + q.points, 0);
+  const attempt = await db.attempt.create({
+    data: {
+      tenantId: ctx.tenant.id,
+      assessmentId,
+      studentId: ctx.user.id,
+      maxScore,
+      answers: {
+        create: assessment.questions.map((q) => ({
+          questionId: q.id,
+          maxScore: q.points,
+          response: "{}",
+        })),
+      },
+    },
+  });
+  await audit({
+    tenantId: ctx.tenant.id,
+    actorId: ctx.user.id,
+    action: "attempt.started",
+    target: attempt.id,
+    meta: { assessmentId },
+  });
+  redirect(`/attempt/${attempt.id}`);
+}
+
+export async function saveAnswerAction(input: {
+  attemptId: string;
+  questionId: string;
+  response: Record<string, unknown>;
+}): Promise<{ ok: boolean; error?: string; expired?: boolean }> {
+  const ctx = await requireTenant("STUDENT");
+  const attempt = await db.attempt.findFirst({
+    where: {
+      id: input.attemptId,
+      studentId: ctx.user.id,
+      tenantId: ctx.tenant.id,
+    },
+    include: { assessment: true, answers: true },
+  });
+  if (!attempt) return { ok: false, error: "Attempt not found" };
+  if (attempt.status !== "IN_PROGRESS") return { ok: false, error: "Attempt already submitted" };
+  if (isAttemptExpired(attempt)) return { ok: false, expired: true };
+
+  const answer = attempt.answers.find((a) => a.questionId === input.questionId);
+  if (!answer) return { ok: false, error: "Question not in this attempt" };
+
+  await db.answer.update({
+    where: { id: answer.id },
+    data: { response: JSON.stringify(input.response ?? {}) },
+  });
+  return { ok: true };
+}
+
+export async function submitAttemptAction(formData: FormData) {
+  const ctx = await requireTenant("STUDENT");
+  const attemptId = String(formData.get("attemptId") ?? "");
+
+  const attempt = await db.attempt.findFirst({
+    where: { id: attemptId, studentId: ctx.user.id, tenantId: ctx.tenant.id },
+    include: { assessment: true },
+  });
+  if (!attempt) redirect("/dashboard");
+
+  if (attempt.status === "IN_PROGRESS") {
+    const spent = Math.max(0, Math.round((Date.now() - attempt.startedAt.getTime()) / 1000));
+    await db.attempt.update({
+      where: { id: attemptId },
+      data: { status: "SUBMITTED", submittedAt: new Date(), timeSpentSec: spent },
+    });
+    await autoGradeAttempt(attemptId);
+    await audit({
+      tenantId: ctx.tenant.id,
+      actorId: ctx.user.id,
+      action: "attempt.submitted",
+      target: attemptId,
+    });
+  }
+
+  redirect(`/results/${attemptId}?submitted=1`);
+}
+
+/** Called by the runner when the clock hits zero. */
+export async function autoSubmitAttemptAction(attemptId: string) {
+  const ctx = await requireTenant("STUDENT");
+  const attempt = await db.attempt.findFirst({
+    where: { id: attemptId, studentId: ctx.user.id, tenantId: ctx.tenant.id },
+  });
+  if (!attempt || attempt.status !== "IN_PROGRESS") return { ok: false };
+
+  const spent = Math.max(0, Math.round((Date.now() - attempt.startedAt.getTime()) / 1000));
+  await db.attempt.update({
+    where: { id: attemptId },
+    data: { status: "SUBMITTED", submittedAt: new Date(), timeSpentSec: spent },
+  });
+  await autoGradeAttempt(attemptId);
+  return { ok: true };
+}
