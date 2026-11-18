@@ -35,6 +35,8 @@ model User {
   attempts           Attempt[]
   answersGraded      Answer[]               @relation("Grader")
   auditLogs          AuditLog[]
+  notifications      Notification[]         @relation("NotificationRecipient")
+  notificationsSent  Notification[]         @relation("NotificationSender")
   uploads            Attachment[]
   attendanceTaken    AttendanceSession[]    @relation("AttendanceCreator")
   attendanceMarked   AttendanceRecord[]     @relation("AttendanceMarker")
@@ -110,6 +112,7 @@ model Tenant {
   attachments        Attachment[]
   audits             AuditLog[]
   outbox             EmailMessage[]
+  notifications      Notification[]
   subscription       Subscription?
   attendanceSessions AttendanceSession[]
   aiProviders        AiProviderConfig[]
@@ -173,6 +176,29 @@ model EmailMessage {
   tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+}
+
+// Per-user in-app notifications. Messages and announcements are fanned out to
+// one row per recipient so each person has their own read state and email copy.
+model Notification {
+  id           String    @id @default(cuid())
+  tenantId     String
+  userId       String
+  senderId     String?
+  kind         String    @default("MESSAGE") // MESSAGE | ANNOUNCEMENT | SYSTEM
+  audience     String? // ALL | STAFF | TEACHERS | LEARNERS for broadcasts
+  title        String
+  body         String
+  readAt       DateTime?
+  emailSentAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  sender User?  @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, userId, readAt])
+  @@index([tenantId, createdAt])
 }
 
 model AuditLog {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  Bell,
   BookOpen,
   BrainCircuit,
   CalendarCheck,
@@ -22,15 +23,23 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Item = { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean };
+type Item = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+  count?: number;
+};
 
 export function SidebarNav({
   role,
   isSuperAdmin,
+  unreadCount = 0,
   onNavigate,
 }: {
   role: string;
   isSuperAdmin: boolean;
+  unreadCount?: number;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -47,6 +56,12 @@ export function SidebarNav({
     label: "Staff",
     icon: UserCog,
   };
+  const notificationsItem: Item = {
+    href: "/dashboard/notifications",
+    label: "Messages",
+    icon: Bell,
+    count: unreadCount > 0 ? unreadCount : undefined,
+  };
 
   const groups: { label: string; items: Item[] }[] = [];
 
@@ -55,6 +70,7 @@ export function SidebarNav({
       label: "Teaching",
       items: [
         { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+        notificationsItem,
         { href: "/dashboard/courses", label: "Courses", icon: BookOpen },
         { href: "/dashboard/assessments", label: "Assessments", icon: ClipboardCheck },
         { href: "/dashboard/bank", label: "Question bank", icon: Library },
@@ -78,6 +94,7 @@ export function SidebarNav({
       label: "Staff",
       items: [
         { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+        notificationsItem,
         moderationItem,
         staffItem,
       ],
@@ -87,6 +104,7 @@ export function SidebarNav({
       label: "Learning",
       items: [
         { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+        notificationsItem,
         { href: "/dashboard/courses", label: "My courses", icon: BookOpen },
         { href: "/learn/check-in", label: "Attendance check-in", icon: CalendarCheck },
         { href: "/dashboard/results", label: "My results", icon: BarChart3 },
@@ -128,7 +146,12 @@ export function SidebarNav({
                   className={cn("sidebar-link", active && "font-semibold")}
                 >
                   <item.icon className="size-4 shrink-0" />
-                  {item.label}
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {item.count !== undefined && item.count > 0 && (
+                    <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-bold text-brand-700">
+                      {item.count}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -142,11 +165,13 @@ export function SidebarNav({
 export function MobileNav({
   role,
   isSuperAdmin,
+  unreadCount = 0,
   tenantName,
   userName,
 }: {
   role: string;
   isSuperAdmin: boolean;
+  unreadCount?: number;
   tenantName: string;
   userName: string;
 }) {
@@ -170,7 +195,7 @@ export function MobileNav({
             if (el instanceof HTMLDetailsElement) el.open = false;
           }}
         >
-          <SidebarNav role={role} isSuperAdmin={isSuperAdmin} />
+          <SidebarNav role={role} isSuperAdmin={isSuperAdmin} unreadCount={unreadCount} />
         </div>
         <div className="mt-3 border-t border-slate-100 pt-2">
           <Link href="/dashboard/billing" className="sidebar-link">

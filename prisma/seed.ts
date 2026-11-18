@@ -52,6 +52,7 @@ async function reset() {
   await db.invitation.deleteMany();
   await db.lesson.deleteMany();
   await db.course.deleteMany();
+  await db.notification.deleteMany();
   await db.emailMessage.deleteMany();
   await db.auditLog.deleteMany();
   await db.session.deleteMany();
@@ -2619,6 +2620,88 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
         subject: "Maya invited you to Studio Math",
         body: "Join Studio Math to follow the SAT Math Accelerator course.",
         kind: "INVITE",
+      },
+      {
+        tenantId: northfield.id,
+        to: "student@northfield.edu",
+        subject: "Northfield Academy: Algebra II study group",
+        body: "Marcus Chen sent you a message on Northfield Academy.\n\nAlgebra II study group\n\nI am running a revision session before the next quiz. Bring your workbook and any questions from section 4.3.\n\nRead it in the app: http://localhost:3000/dashboard/notifications",
+        kind: "MESSAGE",
+        sentAt: days(-1),
+      },
+      {
+        tenantId: northfield.id,
+        to: "teacher@northfield.edu",
+        subject: "Northfield Academy: Question about quadratic word problems",
+        body: "Priya Patel sent you a message on Northfield Academy.\n\nQuestion about quadratic word problems\n\nCould you explain how to choose the correct roots when the context is about area? Thank you!\n\nRead it in the app: http://localhost:3000/dashboard/notifications",
+        kind: "MESSAGE",
+        sentAt: days(-1),
+      },
+      {
+        tenantId: northfield.id,
+        to: "aisha@northfield.edu",
+        subject: "Northfield Academy: Attendance reminder",
+        body: "Dr. Elena Rivera sent you a workspace announcement on Northfield Academy.\n\nAttendance reminder\n\nPlease check in at the start of every lesson. Your attendance record is now visible on your profile.\n\nRead it in the app: http://localhost:3000/dashboard/notifications",
+        kind: "ANNOUNCEMENT",
+        sentAt: days(-2),
+      },
+    ],
+  });
+
+  await db.notification.createMany({
+    data: [
+      {
+        tenantId: northfield.id,
+        userId: priya.id,
+        senderId: marcus.id,
+        kind: "MESSAGE",
+        title: "Algebra II study group",
+        body: "I am running a revision session before the next quiz. Bring your workbook and any questions from section 4.3.",
+        emailSentAt: days(-1),
+        createdAt: days(-1),
+      },
+      {
+        tenantId: northfield.id,
+        userId: marcus.id,
+        senderId: priya.id,
+        kind: "MESSAGE",
+        title: "Question about quadratic word problems",
+        body: "Could you explain how to choose the correct roots when the context is about area? Thank you!",
+        emailSentAt: days(-1),
+        createdAt: days(-1),
+      },
+      {
+        tenantId: northfield.id,
+        userId: aisha.id,
+        senderId: elena.id,
+        kind: "ANNOUNCEMENT",
+        audience: "LEARNERS",
+        title: "Attendance reminder",
+        body: "Please check in at the start of every lesson. Your attendance record is now visible on your profile.",
+        emailSentAt: days(-2),
+        createdAt: days(-2),
+      },
+      {
+        tenantId: northfield.id,
+        userId: priya.id,
+        senderId: elena.id,
+        kind: "ANNOUNCEMENT",
+        audience: "LEARNERS",
+        title: "Attendance reminder",
+        body: "Please check in at the start of every lesson. Your attendance record is now visible on your profile.",
+        readAt: days(-2),
+        emailSentAt: days(-2),
+        createdAt: days(-2),
+      },
+      {
+        tenantId: studio.id,
+        userId: maya.id,
+        senderId: noah.id,
+        kind: "MESSAGE",
+        title: "SAT practice set feedback",
+        body: "Thank you for the extra practice set. The worked solutions made the trickier questions much clearer.",
+        emailSentAt: days(-1),
+        createdAt: days(-1),
       },
     ],
   });

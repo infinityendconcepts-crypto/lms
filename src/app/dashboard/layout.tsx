@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, LogOut, Sparkles } from "lucide-react";
 import { getAppContext } from "@/lib/tenant";
+import { db } from "@/lib/db";
 import { logoutAction } from "@/lib/actions/auth";
 import { TenantSwitcher } from "@/components/TenantSwitcher";
 import { Logo } from "@/components/Logo";
@@ -15,6 +16,9 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const ctx = await getAppContext();
+  const unreadMessages = await db.notification.count({
+    where: { tenantId: ctx.tenant.id, userId: ctx.user.id, readAt: null },
+  });
   const plan = planFor(ctx.tenant.subscription?.plan ?? "STARTER");
   const trialLeft =
     ctx.tenant.subscription?.status === "TRIALING"
@@ -56,7 +60,11 @@ export default async function DashboardLayout({
         </Link>
 
         <div className="flex-1 overflow-y-auto pr-1">
-          <SidebarNav role={ctx.role} isSuperAdmin={ctx.user.isSuperAdmin} />
+          <SidebarNav
+            role={ctx.role}
+            isSuperAdmin={ctx.user.isSuperAdmin}
+            unreadCount={unreadMessages}
+          />
         </div>
 
         <div className="mt-4 space-y-3">
@@ -111,6 +119,7 @@ export default async function DashboardLayout({
             <MobileNav
               role={ctx.role}
               isSuperAdmin={ctx.user.isSuperAdmin}
+              unreadCount={unreadMessages}
               tenantName={ctx.tenant.name}
               userName={ctx.user.name}
             />
