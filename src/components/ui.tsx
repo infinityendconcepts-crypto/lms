@@ -237,6 +237,28 @@ export function Tabs({
   );
 }
 
+export function PanelHeader({
+  icon,
+  title,
+  description,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+        <p className="mt-0.5 text-[11px] text-slate-500">{description}</p>
+      </div>
+    </div>
+  );
+}
+
 export function Divider({ label }: { label?: string }) {
   return (
     <div className="my-6 flex items-center gap-3">

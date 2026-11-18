@@ -12,14 +12,13 @@ import {
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { canAdmin, requireTenant } from "@/lib/tenant";
-import { inviteMemberAction } from "@/lib/actions/tenant";
 import {
   addLearnerAction,
   batchInviteLearnerAction,
   bulkLearnerAction,
   importLearnerAction,
 } from "@/lib/actions/people";
-import { Avatar, Badge, EmptyState, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { Avatar, Badge, EmptyState, PageHeader, PanelHeader, Stat, StatusBadge, Tabs } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
 import { formatDate, pct } from "@/lib/utils";
@@ -37,12 +36,19 @@ export default async function StudentsPage({
     skipped?: string;
     detail?: string;
     error?: string;
+    tab?: string;
   }>;
 }) {
   const sp = await searchParams;
+  const query = sp.q?.trim() ?? "";
+  const activeTab = sp.tab === "invite" || sp.tab === "import" ? sp.tab : "add";
+  const tabHref = (tab: string) => {
+    const params = new URLSearchParams({ tab });
+    if (query) params.set("q", query);
+    return `?${params.toString()}`;
+  };
   const ctx = await requireTenant("TEACHER");
   const admin = canAdmin(ctx.role);
-  const query = sp.q?.trim() ?? "";
 
   const [memberships, invitations, courses] = await Promise.all([
     db.membership.findMany({
@@ -135,18 +141,18 @@ export default async function StudentsPage({
           <>
             {admin && (
               <>
-                <a href="#add-learner" className="btn-primary btn-sm">
+                <a href={tabHref("add")} className="btn-primary btn-sm">
                   <UserPlus className="size-3.5" /> Add learner
                 </a>
-                <a href="#batch-invite-learner" className="btn-secondary btn-sm">
+                <a href={tabHref("invite")} className="btn-secondary btn-sm">
                   <Mail className="size-3.5" /> Batch invite
                 </a>
-                <a href="#import-learner" className="btn-secondary btn-sm">
+                <a href={tabHref("import")} className="btn-secondary btn-sm">
                   <FileText className="size-3.5" /> Import CSV
                 </a>
               </>
             )}
-            <a href="#invite-learner" className="btn-secondary btn-sm">
+            <a href={tabHref("invite")} className="btn-secondary btn-sm">
               <Mail className="size-3.5" /> Invite learner
             </a>
           </>
@@ -174,202 +180,168 @@ export default async function StudentsPage({
       </div>
 
       {admin && (
-        <div className="mt-6 grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-          <details id="add-learner" className="card overflow-hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
-                  <UserPlus className="size-3.5" />
-                </span>
-                Add learner directly
-              </span>
-              <span className="text-[11px] text-slate-400">Uses one learner seat</span>
-            </summary>
-            <form
-              action={addLearnerAction}
-              className="grid gap-3 border-t border-slate-100 p-5 sm:grid-cols-[1fr_1.2fr_1fr_auto] sm:items-end"
-            >
-              <input type="hidden" name="returnTo" value="/dashboard/students" />
-              <div>
-                <label className="label" htmlFor="learner-add-name">Full name</label>
-                <input id="learner-add-name" name="name" required placeholder="Lerato Dlamini" className="input" />
-              </div>
-              <div>
-                <label className="label" htmlFor="learner-add-email">Email address</label>
-                <input id="learner-add-email" name="email" type="email" required placeholder="lerato@school.edu" className="input" />
-              </div>
-              <div>
-                <label className="label" htmlFor="learner-add-course">Enroll in course</label>
-                <select id="learner-add-course" name="courseId" className="select">
-                  <option value="">No course yet</option>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>{course.title}</option>
-                  ))}
-                </select>
-              </div>
-              <SubmitButton pendingText="Adding…">
-                <CheckCircle2 className="size-3.5" /> Add learner
-              </SubmitButton>
-            </form>
-            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
-              The account is active immediately. A temporary password is written to the email outbox.
-            </p>
-          </details>
-
-          <details id="batch-invite-learner" className="card overflow-hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
-                  <Mail className="size-3.5" />
-                </span>
-                Batch invite learners
-              </span>
-              <span className="text-[11px] text-slate-400">Sends join links</span>
-            </summary>
-            <form action={batchInviteLearnerAction} className="space-y-3 border-t border-slate-100 p-5">
-              <input type="hidden" name="returnTo" value="/dashboard/students" />
-              <div>
-                <label className="label" htmlFor="learner-invite-file">CSV file (optional)</label>
-                <input id="learner-invite-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
-              </div>
-              <div>
-                <label className="label" htmlFor="learner-invite-course">Enroll invitees in course</label>
-                <select id="learner-invite-course" name="courseId" className="select">
-                  <option value="">No course</option>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>{course.title}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label" htmlFor="learner-invite-emails">Or paste emails</label>
-                <textarea
-                  id="learner-invite-emails"
-                  name="csv"
-                  rows={4}
-                  placeholder={"learner1@school.edu\nlearner2@school.edu"}
-                  className="textarea"
+        <div className="mt-6">
+          <Tabs
+            items={[
+              { href: tabHref("add"), label: "Add learner" },
+              { href: tabHref("invite"), label: "Batch invite" },
+              { href: tabHref("import"), label: "Import CSV" },
+            ]}
+            current={tabHref(activeTab)}
+          />
+          <div className="card overflow-hidden">
+            {activeTab === "add" && (
+              <>
+                <PanelHeader
+                  icon={<UserPlus className="size-4" />}
+                  title="Add learner directly"
+                  description="Create the account now and enroll them in a course if needed."
                 />
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <SubmitButton pendingText="Sending…">
-                  <Mail className="size-3.5" /> Send invites
-                </SubmitButton>
-                <a
-                  href="/templates/learner-people-template.csv"
-                  download
-                  className="text-[11px] font-semibold text-brand-600 hover:underline"
+                <form
+                  action={addLearnerAction}
+                  className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-[1fr_1.2fr_1fr_auto] lg:items-end"
                 >
-                  Download template
-                </a>
-              </div>
-            </form>
-            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
-              Upload the template or paste one email per line. Learner invites reserve seats until they expire.
-            </p>
-          </details>
+                  <input type="hidden" name="returnTo" value="/dashboard/students" />
+                  <input type="hidden" name="tab" value="add" />
+                  <div>
+                    <label className="label" htmlFor="learner-add-name">Full name</label>
+                    <input id="learner-add-name" name="name" required placeholder="Lerato Dlamini" className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="learner-add-email">Email address</label>
+                    <input id="learner-add-email" name="email" type="email" required placeholder="lerato@school.edu" className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="learner-add-course">Enroll in course</label>
+                    <select id="learner-add-course" name="courseId" className="select">
+                      <option value="">No course yet</option>
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id}>{course.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <SubmitButton pendingText="Adding…">
+                    <CheckCircle2 className="size-3.5" /> Add learner
+                  </SubmitButton>
+                </form>
+                <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+                  The account is active immediately. A temporary password is written to the email outbox and uses one
+                  learner seat.
+                </p>
+              </>
+            )}
 
-          <details id="import-learner" className="card overflow-hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
-                  <FileText className="size-3.5" />
-                </span>
-                Import learners from CSV
-              </span>
-              <span className="text-[11px] text-slate-400">Up to 200 rows</span>
-            </summary>
-            <form action={importLearnerAction} className="space-y-3 border-t border-slate-100 p-5">
-              <input type="hidden" name="returnTo" value="/dashboard/students" />
-              <div>
-                <label className="label" htmlFor="learner-csv-file">CSV file</label>
-                <input id="learner-csv-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
-              </div>
-              <div>
-                <label className="label" htmlFor="learner-csv-course">Default course when the CSV has no course column</label>
-                <select id="learner-csv-course" name="courseId" className="select">
-                  <option value="">No course</option>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>{course.title}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label" htmlFor="learner-csv-text">Or paste CSV</label>
-                <textarea
-                  id="learner-csv-text"
-                  name="csv"
-                  rows={4}
-                  placeholder={"name,email,course\nLerato Dlamini,lerato@school.edu,Algebra I"}
-                  className="textarea"
+            {activeTab === "invite" && (
+              <>
+                <PanelHeader
+                  icon={<Mail className="size-4" />}
+                  title="Batch invite learners"
+                  description="Send 7-day join links to one learner or a whole group."
                 />
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <SubmitButton pendingText="Importing…">
-                  <FileText className="size-3.5" /> Import learners
-                </SubmitButton>
-                <a
-                  href="/templates/learner-people-template.csv"
-                  download
-                  className="text-[11px] font-semibold text-brand-600 hover:underline"
-                >
-                  Download template
-                </a>
-              </div>
-            </form>
-            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
-              Columns: <code>name</code>, <code>email</code>, <code>course</code>. The course column accepts a
-              course title or ID. Learners beyond your plan&apos;s seats are skipped.
-            </p>
-          </details>
+                <form action={batchInviteLearnerAction} className="grid gap-4 p-5 md:grid-cols-2">
+                  <input type="hidden" name="returnTo" value="/dashboard/students" />
+                  <input type="hidden" name="tab" value="invite" />
+                  <div>
+                    <label className="label" htmlFor="learner-invite-file">CSV file (optional)</label>
+                    <input id="learner-invite-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="learner-invite-course">Enroll invitees in course</label>
+                    <select id="learner-invite-course" name="courseId" className="select">
+                      <option value="">No course</option>
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id}>{course.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="label" htmlFor="learner-invite-emails">Or paste emails</label>
+                    <textarea
+                      id="learner-invite-emails"
+                      name="csv"
+                      rows={5}
+                      placeholder={"learner1@school.edu\nlearner2@school.edu"}
+                      className="textarea"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+                    <SubmitButton pendingText="Sending…">
+                      <Mail className="size-3.5" /> Send invites
+                    </SubmitButton>
+                    <a
+                      href="/templates/learner-people-template.csv"
+                      download
+                      className="text-[11px] font-semibold text-brand-600 hover:underline"
+                    >
+                      Download template
+                    </a>
+                  </div>
+                </form>
+                <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+                  Upload the template or paste one email per line. Learner invites reserve seats until they expire.
+                  Inviting one learner works here too.
+                </p>
+              </>
+            )}
+
+            {activeTab === "import" && (
+              <>
+                <PanelHeader
+                  icon={<FileText className="size-4" />}
+                  title="Import learners from CSV"
+                  description="Create several learner accounts at once from a spreadsheet."
+                />
+                <form action={importLearnerAction} className="grid gap-4 p-5 md:grid-cols-2">
+                  <input type="hidden" name="returnTo" value="/dashboard/students" />
+                  <input type="hidden" name="tab" value="import" />
+                  <div>
+                    <label className="label" htmlFor="learner-csv-file">CSV file</label>
+                    <input id="learner-csv-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="learner-csv-course">Default course when the CSV has no course column</label>
+                    <select id="learner-csv-course" name="courseId" className="select">
+                      <option value="">No course</option>
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id}>{course.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="label" htmlFor="learner-csv-text">Or paste CSV</label>
+                    <textarea
+                      id="learner-csv-text"
+                      name="csv"
+                      rows={5}
+                      placeholder={"name,email,course\nLerato Dlamini,lerato@school.edu,Algebra I"}
+                      className="textarea"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+                    <SubmitButton pendingText="Importing…">
+                      <FileText className="size-3.5" /> Import learners
+                    </SubmitButton>
+                    <a
+                      href="/templates/learner-people-template.csv"
+                      download
+                      className="text-[11px] font-semibold text-brand-600 hover:underline"
+                    >
+                      Download template
+                    </a>
+                  </div>
+                </form>
+                <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+                  Columns: <code>name</code>, <code>email</code>, <code>course</code>. The course column accepts a
+                  course title or ID. Learners beyond your plan&apos;s seats are skipped.
+                </p>
+              </>
+            )}
+          </div>
         </div>
       )}
 
-      <details id="invite-learner" className="card mt-6 mb-6 overflow-hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
-            <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
-              <UserPlus className="size-3.5" />
-            </span>
-            Invite a learner
-          </span>
-          <span className="text-[11px] text-slate-400">Sends an email with a join link</span>
-        </summary>
-        <form action={inviteMemberAction} className="grid gap-3 border-t border-slate-100 p-5 sm:grid-cols-[1.4fr_1fr_auto] sm:items-end">
-          <input type="hidden" name="role" value="STUDENT" />
-          <div>
-            <label className="label" htmlFor="invite-email">
-              Email address
-            </label>
-            <input
-              id="invite-email"
-              type="email"
-              name="email"
-              required
-              placeholder="learner@school.edu"
-              className="input"
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="invite-course">
-              Enroll in course (optional)
-            </label>
-            <select id="invite-course" name="courseId" className="select">
-              <option value="">No course yet</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
-                </option>
-              ))}
-            </select>
-          </div>
-          <SubmitButton pendingText="Sending…">
-            <Mail className="size-3.5" /> Send invite
-          </SubmitButton>
-        </form>
-      </details>
-
       <form method="GET" className="mb-5 flex gap-2">
+        <input type="hidden" name="tab" value={activeTab} />
         <div className="relative flex-1">
           <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -381,7 +353,7 @@ export default async function StudentsPage({
         </div>
         <button className="btn-secondary">Search</button>
         {query && (
-          <Link href="/dashboard/students" className="btn-ghost btn-sm justify-center">
+          <Link href={tabHref(activeTab)} className="btn-ghost btn-sm justify-center">
             Reset
           </Link>
         )}
@@ -450,8 +422,8 @@ export default async function StudentsPage({
               : "Invite learners above or share an invite link. They will appear here once they join."
           }
           action={
-            <a href="#invite-learner" className="btn-primary btn-sm">
-              <UserPlus className="size-3.5" /> Invite a learner
+            <a href={tabHref("invite")} className="btn-primary btn-sm">
+              <Mail className="size-3.5" /> Invite a learner
             </a>
           }
         />

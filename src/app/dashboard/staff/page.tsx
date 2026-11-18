@@ -19,7 +19,7 @@ import {
   removeMemberAction,
   revokeInviteAction,
 } from "@/lib/actions/tenant";
-import { Avatar, Badge, PageHeader, Stat } from "@/components/ui";
+import { Avatar, Badge, PageHeader, PanelHeader, Stat, Tabs } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
 import {
@@ -55,9 +55,15 @@ export default async function StaffPage({
     skipped?: string;
     detail?: string;
     error?: string;
+    tab?: string;
   }>;
 }) {
   const sp = await searchParams;
+  const activeTab = sp.tab === "invite" || sp.tab === "import" ? sp.tab : "add";
+  const tabHref = (tab: string) => {
+    const params = new URLSearchParams({ tab });
+    return `?${params.toString()}`;
+  };
   const ctx = await requireTenant("MODERATOR");
   const admin = canAdmin(ctx.role);
 
@@ -113,13 +119,13 @@ export default async function StaffPage({
           <>
             {admin && (
               <>
-                <a href="#add-staff" className="btn-primary btn-sm">
+                <a href={tabHref("add")} className="btn-primary btn-sm">
                   <UserPlus className="size-3.5" /> Add staff
                 </a>
-                <a href="#batch-invite-staff" className="btn-secondary btn-sm">
+                <a href={tabHref("invite")} className="btn-secondary btn-sm">
                   <Mail className="size-3.5" /> Batch invite
                 </a>
-                <a href="#import-staff" className="btn-secondary btn-sm">
+                <a href={tabHref("import")} className="btn-secondary btn-sm">
                   <FileText className="size-3.5" /> Import CSV
                 </a>
               </>
@@ -167,153 +173,160 @@ export default async function StaffPage({
       </div>
 
       {admin && (
-        <div className="mt-6 grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-          <details id="add-staff" className="card overflow-hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
-                  <UserPlus className="size-3.5" />
-                </span>
-                Add staff directly
-              </span>
-              <span className="text-[11px] text-slate-400">Creates the account now</span>
-            </summary>
-            <form
-              action={addStaffAction}
-              className="grid gap-3 border-t border-slate-100 p-5 sm:grid-cols-[1fr_1.3fr_1fr_auto] sm:items-end"
-            >
-              <input type="hidden" name="returnTo" value="/dashboard/staff" />
-              <div>
-                <label className="label" htmlFor="staff-add-name">Full name</label>
-                <input id="staff-add-name" name="name" required placeholder="Amina Patel" className="input" />
-              </div>
-              <div>
-                <label className="label" htmlFor="staff-add-email">Email address</label>
-                <input id="staff-add-email" name="email" type="email" required placeholder="amina@school.edu" className="input" />
-              </div>
-              <div>
-                <label className="label" htmlFor="staff-add-role">Role</label>
-                <select id="staff-add-role" name="role" defaultValue="MODERATOR" className="select">
-                  <option value="MODERATOR">Moderator</option>
-                  <option value="TEACHER">Teacher</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-              </div>
-              <SubmitButton pendingText="Adding…">
-                <CheckCircle2 className="size-3.5" /> Add staff
-              </SubmitButton>
-            </form>
-            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
-              New people receive a temporary password in the email outbox. Existing Nkanyezi accounts are linked
-              to this workspace without changing their password.
-            </p>
-          </details>
-
-          <details id="batch-invite-staff" className="card overflow-hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
-                  <Mail className="size-3.5" />
-                </span>
-                Batch invite staff
-              </span>
-              <span className="text-[11px] text-slate-400">Sends join links</span>
-            </summary>
-            <form action={batchInviteStaffAction} className="space-y-3 border-t border-slate-100 p-5">
-              <input type="hidden" name="returnTo" value="/dashboard/staff" />
-              <div>
-                <label className="label" htmlFor="staff-invite-file">CSV file (optional)</label>
-                <input id="staff-invite-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
-              </div>
-              <div>
-                <label className="label" htmlFor="staff-invite-role">Role for these invitations</label>
-                <select id="staff-invite-role" name="role" defaultValue="MODERATOR" className="select">
-                  <option value="MODERATOR">Moderator</option>
-                  <option value="TEACHER">Teacher</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-              </div>
-              <div>
-                <label className="label" htmlFor="staff-invite-emails">Or paste emails</label>
-                <textarea
-                  id="staff-invite-emails"
-                  name="csv"
-                  rows={4}
-                  placeholder={"colleague1@school.edu\ncolleague2@school.edu"}
-                  className="textarea"
+        <div className="mt-6">
+          <Tabs
+            items={[
+              { href: tabHref("add"), label: "Add staff" },
+              { href: tabHref("invite"), label: "Batch invite" },
+              { href: tabHref("import"), label: "Import CSV" },
+            ]}
+            current={tabHref(activeTab)}
+          />
+          <div className="card overflow-hidden">
+            {activeTab === "add" && (
+              <>
+                <PanelHeader
+                  icon={<UserPlus className="size-4" />}
+                  title="Add staff directly"
+                  description="Create the account now and link it to this workspace."
                 />
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <SubmitButton pendingText="Sending…">
-                  <Mail className="size-3.5" /> Send invites
-                </SubmitButton>
-                <a
-                  href="/templates/staff-people-template.csv"
-                  download
-                  className="text-[11px] font-semibold text-brand-600 hover:underline"
+                <form
+                  action={addStaffAction}
+                  className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-[1fr_1.3fr_1fr_auto] lg:items-end"
                 >
-                  Download template
-                </a>
-              </div>
-            </form>
-            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
-              Upload the template or paste one email per line. Existing members are skipped; pending invites are
-              replaced.
-            </p>
-          </details>
+                  <input type="hidden" name="returnTo" value="/dashboard/staff" />
+                  <input type="hidden" name="tab" value="add" />
+                  <div>
+                    <label className="label" htmlFor="staff-add-name">Full name</label>
+                    <input id="staff-add-name" name="name" required placeholder="Amina Patel" className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="staff-add-email">Email address</label>
+                    <input id="staff-add-email" name="email" type="email" required placeholder="amina@school.edu" className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="staff-add-role">Role</label>
+                    <select id="staff-add-role" name="role" defaultValue="MODERATOR" className="select">
+                      <option value="MODERATOR">Moderator</option>
+                      <option value="TEACHER">Teacher</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+                  <SubmitButton pendingText="Adding…">
+                    <CheckCircle2 className="size-3.5" /> Add staff
+                  </SubmitButton>
+                </form>
+                <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+                  New people receive a temporary password in the email outbox. Existing Nkanyezi accounts are linked
+                  to this workspace without changing their password.
+                </p>
+              </>
+            )}
 
-          <details id="import-staff" className="card overflow-hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
-                  <FileText className="size-3.5" />
-                </span>
-                Import staff from CSV
-              </span>
-              <span className="text-[11px] text-slate-400">Up to 200 rows</span>
-            </summary>
-            <form action={importStaffAction} className="space-y-3 border-t border-slate-100 p-5">
-              <input type="hidden" name="returnTo" value="/dashboard/staff" />
-              <div>
-                <label className="label" htmlFor="staff-csv-file">CSV file</label>
-                <input id="staff-csv-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
-              </div>
-              <div>
-                <label className="label" htmlFor="staff-csv-role">Default role when the CSV has no role column</label>
-                <select id="staff-csv-role" name="role" defaultValue="MODERATOR" className="select">
-                  <option value="MODERATOR">Moderator</option>
-                  <option value="TEACHER">Teacher</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-              </div>
-              <div>
-                <label className="label" htmlFor="staff-csv-text">Or paste CSV</label>
-                <textarea
-                  id="staff-csv-text"
-                  name="csv"
-                  rows={4}
-                  placeholder={"name,email,role\nAmina Patel,amina@school.edu,TEACHER"}
-                  className="textarea"
+            {activeTab === "invite" && (
+              <>
+                <PanelHeader
+                  icon={<Mail className="size-4" />}
+                  title="Batch invite staff"
+                  description="Send 7-day join links to one or several colleagues."
                 />
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <SubmitButton pendingText="Importing…">
-                  <FileText className="size-3.5" /> Import staff
-                </SubmitButton>
-                <a
-                  href="/templates/staff-people-template.csv"
-                  download
-                  className="text-[11px] font-semibold text-brand-600 hover:underline"
-                >
-                  Download template
-                </a>
-              </div>
-            </form>
-            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
-              Columns: <code>name</code>, <code>email</code>, <code>role</code>. Roles may be Moderator, Teacher or
-              Admin. Invalid and duplicate rows are skipped and reported.
-            </p>
-          </details>
+                <form action={batchInviteStaffAction} className="grid gap-4 p-5 md:grid-cols-2">
+                  <input type="hidden" name="returnTo" value="/dashboard/staff" />
+                  <input type="hidden" name="tab" value="invite" />
+                  <div>
+                    <label className="label" htmlFor="staff-invite-file">CSV file (optional)</label>
+                    <input id="staff-invite-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="staff-invite-role">Role for these invitations</label>
+                    <select id="staff-invite-role" name="role" defaultValue="MODERATOR" className="select">
+                      <option value="MODERATOR">Moderator</option>
+                      <option value="TEACHER">Teacher</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="label" htmlFor="staff-invite-emails">Or paste emails</label>
+                    <textarea
+                      id="staff-invite-emails"
+                      name="csv"
+                      rows={5}
+                      placeholder={"colleague1@school.edu\ncolleague2@school.edu"}
+                      className="textarea"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+                    <SubmitButton pendingText="Sending…">
+                      <Mail className="size-3.5" /> Send invites
+                    </SubmitButton>
+                    <a
+                      href="/templates/staff-people-template.csv"
+                      download
+                      className="text-[11px] font-semibold text-brand-600 hover:underline"
+                    >
+                      Download template
+                    </a>
+                  </div>
+                </form>
+                <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+                  Upload the template or paste one email per line. Existing members are skipped; pending invites are
+                  replaced. Inviting one person works here too.
+                </p>
+              </>
+            )}
+
+            {activeTab === "import" && (
+              <>
+                <PanelHeader
+                  icon={<FileText className="size-4" />}
+                  title="Import staff from CSV"
+                  description="Create several staff accounts at once from a spreadsheet."
+                />
+                <form action={importStaffAction} className="grid gap-4 p-5 md:grid-cols-2">
+                  <input type="hidden" name="returnTo" value="/dashboard/staff" />
+                  <input type="hidden" name="tab" value="import" />
+                  <div>
+                    <label className="label" htmlFor="staff-csv-file">CSV file</label>
+                    <input id="staff-csv-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="staff-csv-role">Default role when the CSV has no role column</label>
+                    <select id="staff-csv-role" name="role" defaultValue="MODERATOR" className="select">
+                      <option value="MODERATOR">Moderator</option>
+                      <option value="TEACHER">Teacher</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="label" htmlFor="staff-csv-text">Or paste CSV</label>
+                    <textarea
+                      id="staff-csv-text"
+                      name="csv"
+                      rows={5}
+                      placeholder={"name,email,role\nAmina Patel,amina@school.edu,TEACHER"}
+                      className="textarea"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+                    <SubmitButton pendingText="Importing…">
+                      <FileText className="size-3.5" /> Import staff
+                    </SubmitButton>
+                    <a
+                      href="/templates/staff-people-template.csv"
+                      download
+                      className="text-[11px] font-semibold text-brand-600 hover:underline"
+                    >
+                      Download template
+                    </a>
+                  </div>
+                </form>
+                <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+                  Columns: <code>name</code>, <code>email</code>, <code>role</code>. Roles may be Moderator, Teacher or
+                  Admin. Invalid and duplicate rows are skipped and reported.
+                </p>
+              </>
+            )}
+          </div>
         </div>
       )}
 

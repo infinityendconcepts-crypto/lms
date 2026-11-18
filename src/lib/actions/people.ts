@@ -35,7 +35,8 @@ function buildQuery(parts: Record<string, string | number | undefined | null>) {
 function peopleRedirect(formData: FormData, parts: Record<string, string | number | undefined | null> = {}): never {
   const raw = String(formData.get("returnTo") ?? "");
   const base = raw === "/dashboard/staff" || raw === "/dashboard/students" ? raw : "/dashboard/settings?tab=members";
-  const query = buildQuery(parts);
+  const tab = String(formData.get("tab") ?? "");
+  const query = buildQuery({ tab: ["add", "invite", "import"].includes(tab) ? tab : undefined, ...parts });
   redirect(query ? `${base}${base.includes("?") ? "&" : "?"}${query}` : base);
 }
 
