@@ -12,7 +12,7 @@ import { assertSeatAvailable } from "@/lib/usage";
 import { audit } from "@/lib/audit";
 import { appUrl, sendEmail } from "@/lib/email";
 import { randomSuffix, slugify } from "@/lib/utils";
-import { TRIAL_DAYS } from "@/lib/plans";
+import { TRIAL_DAYS, currencyFor } from "@/lib/plans";
 
 const COOKIE = {
   httpOnly: true,
@@ -39,6 +39,7 @@ export async function updateWorkspaceAction(formData: FormData) {
   const headline = String(formData.get("headline") ?? "").trim();
   const about = String(formData.get("about") ?? "").trim();
   const website = String(formData.get("website") ?? "").trim();
+  const currency = currencyFor(String(formData.get("currency") ?? ""));
   const rawColor = String(formData.get("brandColor") ?? "#4f46e5");
   const brandColor = /^#[0-9a-fA-F]{6}$/.test(rawColor) ? rawColor : "#4f46e5";
 
@@ -52,8 +53,15 @@ export async function updateWorkspaceAction(formData: FormData) {
       about: about || null,
       website: website || null,
       brandColor,
+      currency,
     },
   });
+  if (currency !== ctx.tenant.currency) {
+    await db.courseExpense.updateMany({
+      where: { tenantId: ctx.tenant.id },
+      data: { currency },
+    });
+  }
   await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id, action: "workspace.updated" });
   revalidatePath("/dashboard", "layout");
   redirect("/dashboard/settings?saved=1");

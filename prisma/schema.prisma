@@ -90,6 +90,7 @@ model Tenant {
   logoStorageKey String?
   logoMimeType   String?
   brandColor    String    @default("#4f46e5")
+  currency      String    @default("ZAR") // ZAR | USD | EUR | GBP
   headline    String?
   about       String?
   website     String?
@@ -601,7 +602,7 @@ model CourseExpense {
   title       String
   category    String   @default("OTHER") // MATERIALS | INSTRUCTOR | VENUE | TECHNOLOGY | MARKETING | TRANSPORT | OTHER
   amount      Float
-  currency    String   @default("USD")
+  currency    String   @default("ZAR")
   vendor      String?
   incurredAt  DateTime @default(now())
   notes       String?

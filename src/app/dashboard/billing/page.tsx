@@ -15,9 +15,9 @@ import { cancelPlanAction, selectPlanAction } from "@/lib/actions/billing";
 import { Badge, PageHeader, Progress, StatusBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getPlanState } from "@/lib/usage";
-import { PLAN_LIST, limitLabel, trialDaysLeft } from "@/lib/plans";
+import { PLAN_LIST, currencyFor, limitLabel, trialDaysLeft } from "@/lib/plans";
 import { formatBytes } from "@/lib/storage";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatMoney } from "@/lib/utils";
 
 export const metadata = { title: "Billing & plan" };
 
@@ -31,6 +31,7 @@ export default async function BillingPage({
   const state = await getPlanState(ctx.tenant.id);
   const sub = state.subscription;
   const owner = ctx.role === "OWNER";
+  const currency = currencyFor(ctx.tenant.currency);
   const trialLeft = sub?.status === "TRIALING" ? trialDaysLeft(sub.currentPeriodEnd) : 0;
 
   const storageMb = state.usage.storageBytes / 1024 / 1024;
@@ -86,7 +87,7 @@ export default async function BillingPage({
               </div>
               <div className="text-right">
                 <p className="text-3xl font-bold">
-                  ${state.plan.price}
+                  {formatMoney(state.plan.price, currency, { decimals: 0 })}
                   <span className="text-sm font-medium text-slate-300">/mo</span>
                 </p>
                 {sub && <StatusBadge status={sub.status} />}
@@ -271,7 +272,7 @@ export default async function BillingPage({
               <h3 className="text-sm font-bold text-slate-900">{plan.name}</h3>
               <p className="mt-0.5 text-[11px] leading-5 text-slate-500">{plan.tagline}</p>
               <p className="mt-3 text-2xl font-bold text-slate-900">
-                ${plan.price}
+                {formatMoney(plan.price, currency, { decimals: 0 })}
                 <span className="text-xs font-medium text-slate-400">/month</span>
               </p>
               <ul className="mt-3 flex-1 space-y-1.5">

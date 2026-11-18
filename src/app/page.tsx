@@ -28,8 +28,9 @@ import {
 import { Logo } from "@/components/Logo";
 import { MathText } from "@/components/MathText";
 import { demoLoginAction } from "@/lib/actions/auth";
-import { PLAN_LIST } from "@/lib/plans";
+import { DEFAULT_CURRENCY, PLAN_LIST } from "@/lib/plans";
 import { QUESTION_META, type QuestionType } from "@/lib/questions";
+import { formatMoney } from "@/lib/utils";
 
 const TYPE_ICONS: Record<QuestionType, typeof Sigma> = {
   MULTIPLE_CHOICE: ListChecks,
@@ -567,7 +568,9 @@ export default function LandingPage() {
                   <p className="text-sm font-bold text-slate-900">{plan.name}</p>
                   <p className="mt-1 text-[12px] text-slate-500">{plan.tagline}</p>
                   <p className="mt-4 flex items-end gap-1">
-                    <span className="text-4xl font-bold tracking-tight">${plan.price}</span>
+                    <span className="text-4xl font-bold tracking-tight">
+                      {formatMoney(plan.price, DEFAULT_CURRENCY, { decimals: 0 })}
+                    </span>
                     <span className="pb-1 text-xs text-slate-500">/ month</span>
                   </p>
                   <ul className="mt-5 flex-1 space-y-2.5">

@@ -69,7 +69,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { CoursePlanBoard, type PlanTaskView } from "@/components/CoursePlanBoard";
 import { UploadField } from "@/components/UploadField";
 import { formatBytes } from "@/lib/storage";
-import { formatDate, nowMs } from "@/lib/utils";
+import { currencyFor } from "@/lib/plans";
+import { formatDate, formatMoney, nowMs } from "@/lib/utils";
 
 export const metadata = { title: "Course" };
 
@@ -156,7 +157,7 @@ export default async function CourseDetailPage({
   const budget = course.budget ?? null;
   const budgetRemaining = budget === null ? null : budget - spent;
   const budgetUsed = budget && budget > 0 ? Math.round((spent / budget) * 100) : null;
-  const expenseCurrency = course.expenses[0]?.currency ?? "USD";
+  const expenseCurrency = currencyFor(ctx.tenant.currency);
 
   const padReviewCount = course.codePads.reduce(
     (sum, pad) => sum + pad.submissions.filter((submission) => submission.status === "SUBMITTED").length,
@@ -1187,15 +1188,13 @@ export default async function CourseDetailPage({
               <div className="card p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Budget</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
-                  {budget === null
-                    ? "Not set"
-                    : `${expenseCurrency} ${budget.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  {budget === null ? "Not set" : formatMoney(budget, expenseCurrency)}
                 </p>
               </div>
               <div className="card p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Spent</p>
                 <p className="mt-1 text-xl font-bold text-rose-600">
-                  {expenseCurrency} {spent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatMoney(spent, expenseCurrency)}
                 </p>
               </div>
               <div className="card p-4">
@@ -1205,9 +1204,7 @@ export default async function CourseDetailPage({
                     budgetRemaining !== null && budgetRemaining < 0 ? "text-rose-600" : "text-emerald-600"
                   }`}
                 >
-                  {budgetRemaining === null
-                    ? "—"
-                    : `${expenseCurrency} ${budgetRemaining.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  {budgetRemaining === null ? "—" : formatMoney(budgetRemaining, expenseCurrency)}
                 </p>
               </div>
             </div>
@@ -1267,7 +1264,7 @@ export default async function CourseDetailPage({
                         {expense.notes && <p className="mt-1 text-[10px] text-slate-400">{expense.notes}</p>}
                       </div>
                       <p className="shrink-0 text-right text-xs font-bold text-slate-800">
-                        {expense.currency} {expense.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatMoney(expense.amount, expenseCurrency)}
                       </p>
                       <form action={deleteExpenseAction}>
                         <input type="hidden" name="courseId" value={course.id} />
@@ -1294,28 +1291,20 @@ export default async function CourseDetailPage({
               </label>
               <input id="expense-title" name="title" required placeholder="Printed workbooks" className="input" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label" htmlFor="expense-amount">
-                  Amount
-                </label>
-                <input
-                  id="expense-amount"
-                  name="amount"
-                  type="number"
-                  min={0.01}
-                  step="0.01"
-                  required
-                  placeholder="0.00"
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="label" htmlFor="expense-currency">
-                  Currency
-                </label>
-                <input id="expense-currency" name="currency" defaultValue="USD" className="input" />
-              </div>
+            <div>
+              <label className="label" htmlFor="expense-amount">
+                Amount ({expenseCurrency})
+              </label>
+              <input
+                id="expense-amount"
+                name="amount"
+                type="number"
+                min={0.01}
+                step="0.01"
+                required
+                placeholder="0.00"
+                className="input"
+              />
             </div>
             <div>
               <label className="label" htmlFor="expense-category">

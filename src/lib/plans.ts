@@ -1,5 +1,20 @@
 export type PlanId = "STARTER" | "GROWTH" | "SCALE";
 
+export const CURRENCIES = ["ZAR", "USD", "EUR", "GBP"] as const;
+export type Currency = (typeof CURRENCIES)[number];
+export const DEFAULT_CURRENCY: Currency = "ZAR";
+
+export const CURRENCY_LABELS: Record<Currency, string> = {
+  ZAR: "South African Rand",
+  USD: "US Dollar",
+  EUR: "Euro",
+  GBP: "British Pound",
+};
+
+export function currencyFor(value: string | null | undefined): Currency {
+  return CURRENCIES.includes(value as Currency) ? (value as Currency) : DEFAULT_CURRENCY;
+}
+
 export type Plan = {
   id: PlanId;
   name: string;

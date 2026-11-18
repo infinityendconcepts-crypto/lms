@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
-import { PLANS, type PlanId } from "@/lib/plans";
+import { PLANS, currencyFor, type PlanId } from "@/lib/plans";
 import { nowMs, randomSuffix, slugify } from "@/lib/utils";
 
 const SUBSCRIPTION_STATUSES = ["TRIALING", "ACTIVE", "PAST_DUE", "CANCELED"] as const;
@@ -31,6 +31,7 @@ export async function createAdminWorkspaceAction(formData: FormData) {
   const planId = String(formData.get("plan") ?? "") as PlanId;
   const statusRaw = String(formData.get("status") ?? "TRIALING");
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim().toLowerCase();
+  const currency = currencyFor(String(formData.get("currency") ?? ""));
   const hasCustomSlug = slugRaw.length > 0;
 
   if (name.length < 2 || name.length > 80) redirect("/admin?error=Workspace+name+must+be+2-80+characters");
@@ -76,6 +77,7 @@ export async function createAdminWorkspaceAction(formData: FormData) {
       slug,
       kind,
       brandColor: "#4f46e5",
+      currency,
       headline:
         kind === "TEACHER"
           ? "Independent teaching workspace."
@@ -115,8 +117,12 @@ export async function updateWorkspaceAction(formData: FormData) {
   const brandRaw = String(formData.get("brandColor") ?? "").trim();
   const brandColor = /^#[0-9a-fA-F]{6}$/.test(brandRaw) ? brandRaw : "#4f46e5";
   const headline = String(formData.get("headline") ?? "").trim() || null;
+  const currency = currencyFor(String(formData.get("currency") ?? ""));
 
-  const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { id: true, currency: true },
+  });
   if (!tenant) redirect("/admin?error=Workspace+not+found");
   if (name.length < 2 || name.length > 80 || !slug) {
     redirect("/admin?error=Name+and+slug+are+required");
@@ -129,14 +135,17 @@ export async function updateWorkspaceAction(formData: FormData) {
 
   await db.tenant.update({
     where: { id: tenantId },
-    data: { name: name.slice(0, 80), slug, kind, brandColor, headline },
+    data: { name: name.slice(0, 80), slug, kind, brandColor, headline, currency },
   });
+  if (currency !== tenant.currency) {
+    await db.courseExpense.updateMany({ where: { tenantId }, data: { currency } });
+  }
   await audit({
     tenantId,
     actorId: session.user.id,
     action: "admin.workspace.updated",
     target: tenantId,
-    meta: { name, slug, kind },
+    meta: { name, slug, kind, currency },
   });
   revalidatePath("/admin");
   redirect("/admin?saved=Workspace+details+updated");

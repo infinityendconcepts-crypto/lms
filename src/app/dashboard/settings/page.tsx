@@ -40,6 +40,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { WorkspaceLogo } from "@/components/WorkspaceLogo";
 import { WorkspaceLogoUpload } from "@/components/WorkspaceLogoUpload";
 import { getPlanState } from "@/lib/usage";
+import { CURRENCIES, CURRENCY_LABELS, currencyFor } from "@/lib/plans";
 import { formatDate, timeAgo } from "@/lib/utils";
 
 export const metadata = { title: "Settings" };
@@ -275,6 +276,26 @@ export default async function SettingsPage({
                 />
                 <span className="font-mono text-xs text-slate-500">{ctx.tenant.brandColor}</span>
               </div>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor="ws-currency">
+                Workspace currency
+              </label>
+              <select
+                id="ws-currency"
+                name="currency"
+                defaultValue={currencyFor(ctx.tenant.currency)}
+                className="select"
+              >
+                {CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {code} · {CURRENCY_LABELS[code]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-slate-400">
+                Applied to plan prices, course budgets and expenses across this workspace.
+              </p>
             </div>
             <div className="sm:col-span-2 flex items-center justify-between border-t border-slate-100 pt-4">
               <p className="text-[10px] text-slate-400">

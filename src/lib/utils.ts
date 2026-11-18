@@ -77,6 +77,32 @@ export function formatDuration(seconds: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+const CURRENCY_LOCALES: Record<string, string> = {
+  ZAR: "en-ZA",
+  USD: "en-US",
+  EUR: "en-IE",
+  GBP: "en-GB",
+};
+
+export function formatMoney(
+  amount: number,
+  currency: string = "ZAR",
+  options: { decimals?: number } = {}
+) {
+  const code = currency || "ZAR";
+  const decimals = options.decimals ?? 2;
+  try {
+    return new Intl.NumberFormat(CURRENCY_LOCALES[code] ?? "en-ZA", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(amount);
+  } catch {
+    return `${code} ${amount.toFixed(decimals)}`;
+  }
+}
+
 export function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }

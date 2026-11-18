@@ -32,8 +32,16 @@ import { Logo } from "@/components/Logo";
 import { WorkspaceLogo } from "@/components/WorkspaceLogo";
 import { WorkspaceLogoUpload } from "@/components/WorkspaceLogoUpload";
 import { SubmitButton } from "@/components/SubmitButton";
-import { PLAN_LIST, planFor, trialDaysLeft } from "@/lib/plans";
-import { formatDate, timeAgo } from "@/lib/utils";
+import {
+  CURRENCIES,
+  CURRENCY_LABELS,
+  DEFAULT_CURRENCY,
+  PLAN_LIST,
+  currencyFor,
+  planFor,
+  trialDaysLeft,
+} from "@/lib/plans";
+import { formatDate, formatMoney, timeAgo } from "@/lib/utils";
 
 export const metadata = { title: "Platform admin" };
 export const dynamic = "force-dynamic";
@@ -90,10 +98,17 @@ export default async function AdminPage({
     db.emailMessage.findMany({ orderBy: { createdAt: "desc" }, take: 8 }),
   ]);
 
-  const mrr = tenants.reduce((sum, tenant) => {
-    if (tenant.subscription?.status !== "ACTIVE") return sum;
-    return sum + planFor(tenant.subscription.plan).price;
-  }, 0);
+  const mrrByCurrency = tenants.reduce<Record<string, number>>((sums, tenant) => {
+    if (tenant.subscription?.status !== "ACTIVE") return sums;
+    const currency = currencyFor(tenant.currency);
+    sums[currency] = (sums[currency] ?? 0) + planFor(tenant.subscription.plan).price;
+    return sums;
+  }, {});
+  const mrrLabel =
+    Object.entries(mrrByCurrency)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([currency, amount]) => formatMoney(amount, currency, { decimals: 0 }))
+      .join(" · ") || formatMoney(0, DEFAULT_CURRENCY, { decimals: 0 });
   const activeTenants = tenants.filter((t) => !t.suspended && t.subscription?.status === "ACTIVE").length;
   const trialing = tenants.filter(
     (t) => (t.subscription?.status === "TRIALING" || t.trialEndsAt) && !t.suspended
@@ -147,7 +162,7 @@ export default async function AdminPage({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="Monthly recurring revenue"
-            value={`$${mrr.toLocaleString()}`}
+            value={mrrLabel}
             hint={`${activeTenants} active · ${trialing} trialing`}
             icon={<CreditCard className="size-4" />}
           />
@@ -261,6 +276,23 @@ export default async function AdminPage({
                     </select>
                   </div>
                   <div>
+                    <label className="label" htmlFor="admin-workspace-currency">
+                      Currency
+                    </label>
+                    <select
+                      id="admin-workspace-currency"
+                      name="currency"
+                      defaultValue={DEFAULT_CURRENCY}
+                      className="select"
+                    >
+                      {CURRENCIES.map((code) => (
+                        <option key={code} value={code}>
+                          {code} · {CURRENCY_LABELS[code]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
                     <label className="label" htmlFor="admin-workspace-owner">
                       Owner email
                     </label>
@@ -279,7 +311,7 @@ export default async function AdminPage({
                     <select id="admin-workspace-plan" name="plan" defaultValue="GROWTH" className="select">
                       {PLAN_LIST.map((plan) => (
                         <option key={plan.id} value={plan.id}>
-                          {plan.name} · ${plan.price}/mo
+                          {plan.name} · {formatMoney(plan.price, DEFAULT_CURRENCY, { decimals: 0 })}/mo
                         </option>
                       ))}
                     </select>
@@ -341,7 +373,8 @@ export default async function AdminPage({
                           {tenant._count.assessments} assessments · joined {formatDate(tenant.createdAt)}
                         </p>
                         <p className="mt-0.5 text-[11px] text-slate-400">
-                          {plan.name} · ${plan.price}/mo · {tenant.subscription?.seats ?? plan.seats ?? "∞"} seats
+                          {plan.name} · {formatMoney(plan.price, tenant.currency, { decimals: 0 })}/mo ·{" "}
+                          {tenant.subscription?.seats ?? plan.seats ?? "∞"} seats
                         </p>
                       </div>
                     </div>
@@ -471,6 +504,23 @@ export default async function AdminPage({
                               defaultValue={tenant.brandColor}
                               className="input h-9 p-1"
                             />
+                          </div>
+                          <div>
+                            <label className="label" htmlFor={`workspace-currency-${tenant.id}`}>
+                              Currency
+                            </label>
+                            <select
+                              id={`workspace-currency-${tenant.id}`}
+                              name="currency"
+                              defaultValue={currencyFor(tenant.currency)}
+                              className="select"
+                            >
+                              {CURRENCIES.map((code) => (
+                                <option key={code} value={code}>
+                                  {code} · {CURRENCY_LABELS[code]}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         </div>
                         <div>

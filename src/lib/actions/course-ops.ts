@@ -143,7 +143,7 @@ export async function createExpenseAction(formData: FormData) {
       title: title.slice(0, 160),
       category,
       amount: Math.round(amount * 100) / 100,
-      currency: String(formData.get("currency") ?? "USD").trim().slice(0, 8) || "USD",
+      currency: ctx.tenant.currency || "ZAR",
       vendor: String(formData.get("vendor") ?? "").trim() || null,
       incurredAt: Number.isNaN(incurredAt.getTime()) ? new Date() : incurredAt,
       notes: String(formData.get("notes") ?? "").trim() || null,
