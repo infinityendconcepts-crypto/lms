@@ -6,10 +6,12 @@ import {
   CalendarDays,
   Download,
   FileText,
+  Filter,
   History,
   KeyRound,
   Percent,
   Save,
+  Table2,
   Trash2,
   UserCheck,
   UserX,
@@ -32,9 +34,13 @@ import {
   ATTENDANCE_STATUSES,
   attendanceCodeActive,
   attendanceRate,
+  calendarMonthDays,
   countStatuses,
   dateInputValue,
   isAttendanceStatus,
+  monthDate,
+  parseDateInput,
+  shiftMonth,
 } from "@/lib/attendance";
 
 export const metadata = { title: "Attendance register" };
@@ -45,6 +51,28 @@ type HistoryRecord = { status: string; note: string | null; updatedAt: Date };
 function formatClock(date: Date) {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
+
+function monthKey(date: Date) {
+  return dateInputValue(date).slice(0, 7);
+}
+
+/** Explicit calendar labels, plus contextual states for empty/ambiguous days. */
+const HISTORY_STATUS_META: Record<string, { label: string; tone: HistoryTone; dot: string }> = {
+  PRESENT: { label: "Present", tone: "green", dot: "bg-emerald-500" },
+  ABSENT: { label: "Absent", tone: "red", dot: "bg-rose-500" },
+  LATE: { label: "Late", tone: "amber", dot: "bg-amber-500" },
+  EXCUSED: { label: "Excused", tone: "sky", dot: "bg-sky-500" },
+  NO_REGISTER: { label: "No register", tone: "slate", dot: "bg-slate-300" },
+  NO_MARK: { label: "No mark", tone: "sky", dot: "bg-sky-300" },
+  NOT_ENROLLED: { label: "Not enrolled", tone: "slate", dot: "bg-slate-400" },
+};
+
+const HISTORY_STATUS_PILL: Record<string, string> = {
+  PRESENT: "bg-emerald-50 text-emerald-700",
+  ABSENT: "bg-rose-50 text-rose-700",
+  LATE: "bg-amber-50 text-amber-700",
+  EXCUSED: "bg-sky-50 text-sky-700",
+};
 
 function historyMark(record?: HistoryRecord | null): {
   label: string;
@@ -84,11 +112,38 @@ export default async function AttendanceRegisterPage({
     existing?: string;
     error?: string;
     code?: string;
+    view?: string;
+    q?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    month?: string;
+    date?: string;
   }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
   const ctx = await requireTenant("TEACHER");
+
+  const historyView = sp.view === "calendar" ? "calendar" : "table";
+  const query = sp.q?.trim() ?? "";
+  const statusFilter = isAttendanceStatus(sp.status) ? sp.status : "ALL";
+  const fromDate = parseDateInput(sp.from);
+  const toDate = parseDateInput(sp.to);
+  const fromKey = fromDate ? dateInputValue(fromDate) : "";
+  const toKey = toDate ? dateInputValue(toDate) : "";
+  const now = new Date();
+  const todayKey = dateInputValue(now);
+  const calMonth = monthDate(sp.month);
+  const calMonthKey = monthKey(calMonth);
+  const parsedCalDate = parseDateInput(sp.date);
+  const calDate =
+    parsedCalDate && monthKey(parsedCalDate) === calMonthKey
+      ? parsedCalDate
+      : todayKey.slice(0, 7) === calMonthKey
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12)
+        : new Date(calMonth.getFullYear(), calMonth.getMonth(), 1, 12);
+  const calDateKey = dateInputValue(calDate);
 
   const session = await db.attendanceSession.findFirst({
     where: { id, tenantId: ctx.tenant.id },
@@ -160,6 +215,101 @@ export default async function AttendanceRegisterPage({
   });
   const historyRecords = new Map(
     courseSessions.map((item) => [item.id, new Map(item.records.map((record) => [record.studentId, record]))])
+  );
+
+  const filteredSessions = courseSessions.filter((item) => {
+    const key = dateInputValue(item.date);
+    if (fromKey && key < fromKey) return false;
+    if (toKey && key > toKey) return false;
+    return true;
+  });
+  const needle = query.toLowerCase();
+  const filteredHistoryStudents = historyStudents.filter(
+    (student) =>
+      !needle || student.name.toLowerCase().includes(needle) || student.email.toLowerCase().includes(needle)
+  );
+  const visibleStudentIds = new Set(filteredHistoryStudents.map((student) => student.id));
+
+  const historyByDate = new Map<string, { sessions: typeof filteredSessions; counts: ReturnType<typeof countStatuses> }>();
+  for (const item of filteredSessions) {
+    const key = dateInputValue(item.date);
+    const bucket = historyByDate.get(key) ?? { sessions: [], counts: countStatuses([]) };
+    bucket.sessions.push(item);
+    for (const record of item.records) {
+      if (visibleStudentIds.has(record.studentId) && isAttendanceStatus(record.status)) {
+        bucket.counts[record.status] += 1;
+      }
+    }
+    historyByDate.set(key, bucket);
+  }
+  const selectedBucket = historyByDate.get(calDateKey) ?? { sessions: [], counts: countStatuses([]) };
+  const calendarCells = calendarMonthDays(calMonth).map((day, index) => ({
+    index,
+    day,
+    key: day ? dateInputValue(day) : null,
+  }));
+
+  const buildHistoryHref = (next: { view?: "table" | "calendar"; month?: string; date?: string } = {}) => {
+    const view = next.view ?? historyView;
+    const params = new URLSearchParams({ view });
+    if (query) params.set("q", query);
+    if (statusFilter !== "ALL") params.set("status", statusFilter);
+    if (fromKey) params.set("from", fromKey);
+    if (toKey) params.set("to", toKey);
+    if (view === "calendar") {
+      params.set("month", next.month ?? calMonthKey);
+      params.set("date", next.date ?? calDateKey);
+    }
+    return `?${params.toString()}`;
+  };
+  const hasHistoryFilters = Boolean(query || statusFilter !== "ALL" || fromKey || toKey);
+  const clearHistoryHref = `?view=${historyView}${
+    historyView === "calendar" ? `&month=${calMonthKey}&date=${calDateKey}` : ""
+  }`;
+
+  const prevMonth = shiftMonth(calMonth, -1);
+  const nextMonth = shiftMonth(calMonth, 1);
+  const daySessions = filteredSessions.filter((item) => dateInputValue(item.date) === calDateKey);
+  const calendarRows = filteredHistoryStudents.map((student) => {
+    const marks = daySessions.flatMap((session) =>
+      session.records
+        .filter((record) => record.studentId === student.id)
+        .map((record) => ({ session, record }))
+    );
+    let statusKey = "NO_REGISTER";
+    if (daySessions.length > 0) {
+      if (marks.length === 0) {
+        statusKey = enrolledIds.has(student.id) ? "NO_MARK" : "NOT_ENROLLED";
+      } else {
+        statusKey =
+          (["ABSENT", "LATE", "EXCUSED", "PRESENT"] as const).find((status) =>
+            marks.some(({ record }) => record.status === status)
+          ) ?? "NO_MARK";
+      }
+    }
+    const detail =
+      marks.length === 0
+        ? statusKey === "NO_REGISTER"
+          ? "No register for this day"
+          : statusKey === "NOT_ENROLLED"
+            ? "Not on this course"
+            : "Waiting for a mark"
+        : marks
+            .map(({ session, record }) => {
+              const label = isAttendanceStatus(record.status)
+                ? ATTENDANCE_META[record.status].label
+                : record.status;
+              const selfCheckIn =
+                record.note === "Self check-in" ? ` · ${formatClock(record.updatedAt)}` : "";
+              return `${session.title || session.lesson?.title || formatDate(session.date)}: ${label}${
+                record.note ? ` · ${record.note}` : ""
+              }${selfCheckIn}`;
+            })
+            .join(" · ");
+    return { student, statusKey, detail };
+  });
+  const selectedCalendarRows = calendarRows.filter(
+    (row) => statusFilter === "ALL" || row.statusKey === statusFilter
   );
 
   const effective = students.map((student) => ({
@@ -325,100 +475,421 @@ export default async function AttendanceRegisterPage({
               <History className="size-4 text-brand-600" /> Attendance over time
             </h2>
             <p className="mt-1 max-w-3xl text-[11px] leading-5 text-slate-500">
-              Every register for {session.course.title}, oldest to newest. Yes means present or late; No means absent.
-              Times appear under learner self check-ins. Select a date to open that register.
+              Full chronological register history for {session.course.title}. Filter learners, statuses or dates,
+              then switch between the table and calendar.
             </p>
           </div>
-          <Badge tone="brand">{courseSessions.length} registers</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="brand">
+              {filteredSessions.length === courseSessions.length
+                ? `${courseSessions.length} registers`
+                : `${filteredSessions.length} of ${courseSessions.length} registers`}
+            </Badge>
+            <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+              <Link
+                href={buildHistoryHref({ view: "table" })}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition",
+                  historyView === "table"
+                    ? "bg-white text-brand-700 shadow-sm"
+                    : "text-slate-500 hover:text-slate-900"
+                )}
+              >
+                <Table2 className="size-3.5" /> Table
+              </Link>
+              <Link
+                href={buildHistoryHref({ view: "calendar" })}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition",
+                  historyView === "calendar"
+                    ? "bg-white text-brand-700 shadow-sm"
+                    : "text-slate-500 hover:text-slate-900"
+                )}
+              >
+                <CalendarDays className="size-3.5" /> Calendar
+              </Link>
+            </div>
+          </div>
         </div>
-        {historyStudents.length === 0 ? (
-          <EmptyState
-            icon={<History className="size-5" />}
-            title="No learners to show"
-            description="Enroll learners on this course to build the attendance history grid."
-          />
-        ) : (
-          <div className="max-h-[32rem] overflow-auto">
-            <table className="table" style={{ minWidth: 320 + courseSessions.length * 112 }}>
-              <thead>
-                <tr>
-                  <th className="sticky top-0 left-0 z-30 w-14 bg-slate-50 px-3 py-3 text-center">No.</th>
-                  <th className="sticky top-0 left-14 z-30 min-w-56 bg-slate-50 px-3 py-3">Learner</th>
-                  {courseSessions.map((item) => {
-                    const current = item.id === session.id;
-                    const day = new Date(item.date);
-                    return (
-                      <th
-                        key={item.id}
-                        className={cn(
-                          "sticky top-0 z-20 min-w-28 px-3 py-3 text-center",
-                          current ? "bg-brand-50/80" : "bg-slate-50/70"
-                        )}
-                      >
-                        <Link
-                          href={`/dashboard/attendance/${item.id}`}
-                          className={cn(
-                            "block text-[11px] font-bold hover:text-brand-700",
-                            current ? "text-brand-700" : "text-slate-700"
-                          )}
-                          title={formatDate(item.date)}
-                        >
-                          {day.toLocaleDateString("en-US", { weekday: "short" })}
-                        </Link>
-                        <Link
-                          href={`/dashboard/attendance/${item.id}`}
-                          className="block text-[10px] font-semibold text-slate-400 hover:text-brand-700"
-                        >
-                          {formatDate(item.date).replace(/,?\s*\d{4}$/, "")}
-                        </Link>
-                        <p className="truncate text-[9px] font-normal text-slate-400">
-                          {item.title || item.lesson?.title || "Register"}
-                        </p>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {historyStudents.map((student, index) => (
-                  <tr key={student.id} className="group">
-                    <td className="sticky left-0 z-10 w-14 bg-white px-3 py-2 text-center text-[11px] text-slate-400 group-hover:bg-slate-50/60">
-                      {index + 1}
-                    </td>
-                    <td className="sticky left-14 z-10 min-w-56 bg-white px-3 py-2 group-hover:bg-slate-50/60">
-                      <div className="flex items-center gap-2">
-                        <Avatar name={student.name} src={student.avatarUrl} size="sm" />
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-slate-900">{student.name}</p>
-                          <p className="truncate text-[10px] text-slate-400">{student.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    {courseSessions.map((item) => {
-                      const record = historyRecords.get(item.id)?.get(student.id);
-                      const mark = historyMark(record);
+
+        <form
+          method="GET"
+          className="flex flex-wrap items-end gap-2 border-b border-slate-100 bg-slate-50/50 px-5 py-3"
+        >
+          <input type="hidden" name="view" value={historyView} />
+          {historyView === "calendar" && (
+            <>
+              <input type="hidden" name="month" value={calMonthKey} />
+              <input type="hidden" name="date" value={calDateKey} />
+            </>
+          )}
+          <div className="min-w-48 flex-1">
+            <label className="label mb-1 text-[10px]" htmlFor="history-q">
+              <Filter className="mr-1 inline size-3" /> Learner
+            </label>
+            <input
+              id="history-q"
+              name="q"
+              defaultValue={query}
+              placeholder="Search name or email"
+              className="input py-1.5 text-xs"
+            />
+          </div>
+          <div className="min-w-40">
+            <label className="label mb-1 text-[10px]" htmlFor="history-status">
+              Status
+            </label>
+            <select
+              id="history-status"
+              name="status"
+              defaultValue={statusFilter}
+              className="select py-1.5 text-xs"
+            >
+              <option value="ALL">All statuses</option>
+              {ATTENDANCE_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {ATTENDANCE_META[status].label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label mb-1 text-[10px]" htmlFor="history-from">
+              From
+            </label>
+            <input
+              id="history-from"
+              name="from"
+              type="date"
+              defaultValue={fromKey}
+              className="input py-1.5 text-xs"
+            />
+          </div>
+          <div>
+            <label className="label mb-1 text-[10px]" htmlFor="history-to">
+              To
+            </label>
+            <input
+              id="history-to"
+              name="to"
+              type="date"
+              defaultValue={toKey}
+              className="input py-1.5 text-xs"
+            />
+          </div>
+          <button className="btn-secondary btn-sm" type="submit">
+            Apply
+          </button>
+          {hasHistoryFilters && (
+            <Link href={clearHistoryHref} className="btn-ghost btn-sm">
+              Clear
+            </Link>
+          )}
+        </form>
+
+        {historyView === "table" ? (
+          filteredSessions.length === 0 ? (
+            <EmptyState
+              icon={<History className="size-5" />}
+              title="No registers match these dates"
+              description="Widen the date range or clear the filters to see the full history."
+            />
+          ) : filteredHistoryStudents.length === 0 ? (
+            <EmptyState
+              icon={<Filter className="size-5" />}
+              title="No learners match this search"
+              description="Try a different name or email, or clear the filters."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table" style={{ minWidth: 320 + filteredSessions.length * 112 }}>
+                <thead>
+                  <tr>
+                    <th className="sticky top-0 left-0 z-30 w-14 bg-slate-50 px-3 py-3 text-center">No.</th>
+                    <th className="sticky top-0 left-14 z-30 min-w-56 bg-slate-50 px-3 py-3">Learner</th>
+                    {filteredSessions.map((item) => {
                       const current = item.id === session.id;
+                      const day = new Date(item.date);
                       return (
-                        <td
+                        <th
                           key={item.id}
-                          className={cn("min-w-28 px-3 py-2 text-center", current && "bg-brand-50/40")}
-                        >
-                          <span title={mark.title} className="inline-flex items-center justify-center gap-1.5">
-                            <span className={cn("size-1.5 rounded-full", mark.dot)} />
-                            <Badge tone={mark.tone}>{mark.label}</Badge>
-                          </span>
-                          {record?.note === "Self check-in" && (
-                            <span className="mt-0.5 block text-[9px] text-slate-400">
-                              {formatClock(record.updatedAt)}
-                            </span>
+                          className={cn(
+                            "sticky top-0 z-20 min-w-28 px-3 py-3 text-center",
+                            current ? "bg-brand-50/80" : "bg-slate-50/70"
                           )}
-                        </td>
+                        >
+                          <Link
+                            href={`/dashboard/attendance/${item.id}`}
+                            className={cn(
+                              "block text-[11px] font-bold hover:text-brand-700",
+                              current ? "text-brand-700" : "text-slate-700"
+                            )}
+                            title={formatDate(item.date)}
+                          >
+                            {day.toLocaleDateString("en-US", { weekday: "short" })}
+                          </Link>
+                          <Link
+                            href={`/dashboard/attendance/${item.id}`}
+                            className="block text-[10px] font-semibold text-slate-400 hover:text-brand-700"
+                          >
+                            {formatDate(item.date).replace(/,?\s*\d{4}$/, "")}
+                          </Link>
+                          <p className="truncate text-[9px] font-normal text-slate-400">
+                            {item.title || item.lesson?.title || "Register"}
+                          </p>
+                        </th>
                       );
                     })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredHistoryStudents.map((student, index) => (
+                    <tr key={student.id} className="group">
+                      <td className="sticky left-0 z-10 w-14 bg-white px-3 py-2 text-center text-[11px] text-slate-400 group-hover:bg-slate-50/60">
+                        {index + 1}
+                      </td>
+                      <td className="sticky left-14 z-10 min-w-56 bg-white px-3 py-2 group-hover:bg-slate-50/60">
+                        <div className="flex items-center gap-2">
+                          <Avatar name={student.name} src={student.avatarUrl} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-slate-900">{student.name}</p>
+                            <p className="truncate text-[10px] text-slate-400">{student.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      {filteredSessions.map((item) => {
+                        const record = historyRecords.get(item.id)?.get(student.id);
+                        const current = item.id === session.id;
+                        const matchesStatus = statusFilter === "ALL" || record?.status === statusFilter;
+                        if (!matchesStatus) {
+                          return (
+                            <td
+                              key={item.id}
+                              className={cn("min-w-28 px-3 py-2 text-center", current && "bg-brand-50/40")}
+                            >
+                              <span title="Filtered out" className="text-slate-300">
+                                —
+                              </span>
+                            </td>
+                          );
+                        }
+                        const mark = historyMark(record);
+                        return (
+                          <td
+                            key={item.id}
+                            className={cn("min-w-28 px-3 py-2 text-center", current && "bg-brand-50/40")}
+                          >
+                            <span title={mark.title} className="inline-flex items-center justify-center gap-1.5">
+                              <span className={cn("size-1.5 rounded-full", mark.dot)} />
+                              <Badge tone={mark.tone}>{mark.label}</Badge>
+                            </span>
+                            {record?.note === "Self check-in" && (
+                              <span className="mt-0.5 block text-[9px] text-slate-400">
+                                {formatClock(record.updatedAt)}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : (
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  {calMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                </h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  Present, Absent, Late and Excused counts for each day. Select a date for every learner.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={buildHistoryHref({
+                    month: monthKey(prevMonth),
+                    date: dateInputValue(prevMonth),
+                  })}
+                  className="btn-secondary btn-sm"
+                >
+                  Previous
+                </Link>
+                <Link
+                  href={buildHistoryHref({
+                    month: monthKey(nextMonth),
+                    date: dateInputValue(nextMonth),
+                  })}
+                  className="btn-secondary btn-sm"
+                >
+                  Next
+                </Link>
+                <Link
+                  href={buildHistoryHref({ month: monthKey(new Date()), date: todayKey })}
+                  className="btn-ghost btn-sm"
+                >
+                  Today
+                </Link>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/70">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                <div
+                  key={day}
+                  className="px-2 py-2 text-center text-[10px] font-bold tracking-wide text-slate-500 uppercase"
+                >
+                  {day}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {calendarCells.map(({ index, day, key }) => {
+                if (!day || !key) {
+                  return (
+                    <div
+                      key={`blank-${index}`}
+                      className="min-h-20 border-r border-b border-slate-100 bg-slate-50/40"
+                    />
+                  );
+                }
+                const bucket = historyByDate.get(key);
+                return (
+                  <Link
+                    key={key}
+                    href={buildHistoryHref({ date: key })}
+                    className={cn(
+                      "min-h-20 border-r border-b border-slate-100 p-2 transition hover:bg-brand-50/60",
+                      key === calDateKey && "bg-brand-50 ring-1 ring-inset ring-brand-200",
+                      key === todayKey && "font-semibold text-brand-700"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-xs",
+                        key === todayKey ? "font-bold text-brand-700" : "text-slate-700"
+                      )}
+                    >
+                      {day.getDate()}
+                    </span>
+                    {bucket && (
+                      <span className="mt-1.5 flex flex-wrap items-center gap-1">
+                        {ATTENDANCE_STATUSES.map((status) => {
+                          const meta = ATTENDANCE_META[status];
+                          const dimmed = statusFilter !== "ALL" && statusFilter !== status;
+                          return (
+                            <span
+                              key={status}
+                              title={meta.label}
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                                HISTORY_STATUS_PILL[status],
+                                dimmed && "bg-slate-50 text-slate-400 opacity-50"
+                              )}
+                            >
+                              <span className={cn("size-1.5 rounded-full", meta.dot)} />
+                              {bucket.counts[status]}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-3 border-b border-slate-100 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+              {ATTENDANCE_STATUSES.map((status) => {
+                const meta = ATTENDANCE_META[status];
+                return (
+                  <div
+                    key={status}
+                    className={cn(
+                      "flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3",
+                      statusFilter !== "ALL" && statusFilter !== status && "opacity-50"
+                    )}
+                  >
+                    <span className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                      <span className={cn("size-2 rounded-full", meta.dot)} />
+                      {meta.label}
+                    </span>
+                    <span className="text-lg font-bold text-slate-900">{selectedBucket.counts[status]}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Learners · {formatDate(calDate)}</h3>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Every learner in this course history, with their status for the selected day.
+                  </p>
+                </div>
+                <Badge tone="slate">{selectedCalendarRows.length} shown</Badge>
+              </div>
+              {selectedCalendarRows.length === 0 ? (
+                <EmptyState
+                  icon={<CalendarDays className="size-5" />}
+                  title="No learners for this status"
+                  description="Choose another date or clear the status filter to see more learners."
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Learner</th>
+                        <th>Status</th>
+                        <th>Register detail</th>
+                        <th>Register</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedCalendarRows.map(({ student, statusKey, detail }) => {
+                        const meta = HISTORY_STATUS_META[statusKey] ?? HISTORY_STATUS_META.NO_REGISTER;
+                        return (
+                          <tr key={student.id}>
+                            <td>
+                              <div className="flex items-center gap-2.5">
+                                <Avatar name={student.name} src={student.avatarUrl} size="sm" />
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-semibold text-slate-900">{student.name}</p>
+                                  <p className="truncate text-[10px] text-slate-400">{student.email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className={cn("size-2 rounded-full", meta.dot)} />
+                                <Badge tone={meta.tone}>{meta.label}</Badge>
+                              </span>
+                            </td>
+                            <td className="text-[11px] text-slate-500">{detail}</td>
+                            <td>
+                              {daySessions[0] ? (
+                                <Link
+                                  href={`/dashboard/attendance/${daySessions[0].id}`}
+                                  className="text-[11px] font-semibold text-brand-600 hover:underline"
+                                >
+                                  Open
+                                </Link>
+                              ) : (
+                                <span className="text-[11px] text-slate-400">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </section>
