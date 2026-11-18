@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   Clock,
+  CreditCard,
   Download,
   FileText,
   GraduationCap,
@@ -24,7 +25,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { db } from "@/lib/db";
-import { requireTenant } from "@/lib/tenant";
+import { canAdmin, requireTenant } from "@/lib/tenant";
 import {
   addQualificationAction,
   deleteQualificationAction,
@@ -154,6 +155,7 @@ export default async function StudentProfilePage({
         : sponsorshipState === "ENDED"
           ? "Ended"
           : "Not set";
+  const canManageBilling = canAdmin(ctx.role);
   const tab = sp.tab ?? "profile";
 
   const graded = student.attempts.filter((attempt) => attempt.status === "GRADED");
@@ -918,6 +920,50 @@ export default async function StudentProfilePage({
               </div>
             </div>
           </section>
+
+          {profile?.sponsorshipType === "SELF" && (
+            <section className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-sky-900">
+                    <CreditCard className="size-4 text-sky-600" /> Self-funded subscription
+                  </h3>
+                  <p className="mt-1 max-w-2xl text-[11px] leading-5 text-sky-800">
+                    {student.name.split(" ")[0]} pays their own way. Subscriptions are managed at workspace
+                    level, not per learner — use these steps to keep the plan and payments current.
+                  </p>
+                </div>
+                {canManageBilling ? (
+                  <Link href="/dashboard/billing" className="btn-secondary btn-sm">
+                    <CreditCard className="size-3.5" /> Manage subscription
+                  </Link>
+                ) : (
+                  <Link href="/dashboard/settings?tab=workspace" className="btn-secondary btn-sm">
+                    View plan &amp; usage
+                  </Link>
+                )}
+              </div>
+              <ol className="mt-3 grid gap-2 text-[11px] leading-5 text-sky-900 sm:grid-cols-3">
+                <li>
+                  <span className="font-bold">1. Review the plan.</span> Check the current plan, seats and
+                  renewal date in Billing &amp; plan.
+                </li>
+                <li>
+                  <span className="font-bold">2. Confirm payment.</span> Only the workspace owner or admin can
+                  switch plans, apply a promo or cancel. Ask the learner to settle payment with them.
+                </li>
+                <li>
+                  <span className="font-bold">3. Record the agreement.</span> Add the agreed amount and renewal
+                  terms in the sponsorship notes below.
+                </li>
+              </ol>
+              {!canManageBilling && (
+                <p className="mt-3 text-[11px] text-sky-800">
+                  You can view plan usage, but only an owner or admin can change billing.
+                </p>
+              )}
+            </section>
+          )}
 
           <form action={saveSponsorshipAction} className="card-pad space-y-5">
             <input type="hidden" name="studentId" value={student.id} />
