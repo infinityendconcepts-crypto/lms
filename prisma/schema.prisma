@@ -683,6 +683,16 @@ model StudentProfile {
   guardianEmail        String?
   emergencyNotes       String?
   customFields         String    @default("[]") // [{ label, value }]
+
+  // How the learner is funded, plus the cover period.
+  sponsorshipType      String?
+  sponsorshipProvider  String?
+  sponsorshipReference String?
+  sponsorshipStartDate DateTime?
+  sponsorshipEndDate   DateTime?
+  sponsorshipMonths    Int?
+  sponsorshipNotes     String?
+
   notes                String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt

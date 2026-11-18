@@ -5,6 +5,12 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
+import {
+  addSponsorshipMonths,
+  isSponsorshipType,
+  monthsBetweenSponsorshipDates,
+  parseSponsorshipDate,
+} from "@/lib/sponsorship";
 
 async function studentInTenant(studentId: string, tenantId: string) {
   const membership = await db.membership.findFirst({
@@ -96,6 +102,71 @@ export async function saveStudentProfileAction(formData: FormData) {
   });
   revalidatePath(`/dashboard/students/${studentId}`);
   redirect(`/dashboard/students/${studentId}?saved=profile`);
+}
+
+export async function saveSponsorshipAction(formData: FormData) {
+  const ctx = await requireTenant("TEACHER");
+  const studentId = String(formData.get("studentId") ?? "");
+  const membership = await studentInTenant(studentId, ctx.tenant.id);
+
+  const rawType = String(formData.get("sponsorshipType") ?? "");
+  const sponsorshipType = isSponsorshipType(rawType) ? rawType : null;
+  const sponsorshipProvider = text(formData, "sponsorshipProvider");
+  const sponsorshipReference = text(formData, "sponsorshipReference");
+  const sponsorshipNotes = text(formData, "sponsorshipNotes");
+
+  const startDate = parseSponsorshipDate(text(formData, "sponsorshipStartDate"));
+  let endDate = parseSponsorshipDate(text(formData, "sponsorshipEndDate"));
+  const monthsRaw = String(formData.get("sponsorshipMonths") ?? "").trim();
+  const parsedMonths = monthsRaw ? Number(monthsRaw) : null;
+  let sponsorshipMonths =
+    parsedMonths !== null && Number.isFinite(parsedMonths)
+      ? Math.min(600, Math.max(0, Math.round(parsedMonths)))
+      : null;
+
+  if (startDate && endDate && endDate.getTime() < startDate.getTime()) {
+    redirect(`/dashboard/students/${studentId}?tab=sponsorship&error=End+date+cannot+be+before+start+date`);
+  }
+  if (startDate && endDate && sponsorshipMonths === null) {
+    sponsorshipMonths = monthsBetweenSponsorshipDates(startDate, endDate);
+  }
+  if (startDate && sponsorshipMonths && sponsorshipMonths > 0 && !endDate) {
+    endDate = addSponsorshipMonths(startDate, sponsorshipMonths);
+  }
+
+  await db.studentProfile.upsert({
+    where: { tenantId_userId: { tenantId: ctx.tenant.id, userId: studentId } },
+    create: {
+      tenantId: ctx.tenant.id,
+      userId: studentId,
+      sponsorshipType,
+      sponsorshipProvider,
+      sponsorshipReference,
+      sponsorshipStartDate: startDate,
+      sponsorshipEndDate: endDate,
+      sponsorshipMonths,
+      sponsorshipNotes,
+    },
+    update: {
+      sponsorshipType,
+      sponsorshipProvider,
+      sponsorshipReference,
+      sponsorshipStartDate: startDate,
+      sponsorshipEndDate: endDate,
+      sponsorshipMonths,
+      sponsorshipNotes,
+    },
+  });
+
+  await audit({
+    tenantId: ctx.tenant.id,
+    actorId: ctx.user.id,
+    action: "student.sponsorship_updated",
+    target: studentId,
+    meta: { learner: membership.user.name, type: sponsorshipType },
+  });
+  revalidatePath(`/dashboard/students/${studentId}`);
+  redirect(`/dashboard/students/${studentId}?tab=sponsorship&saved=sponsorship`);
 }
 
 export async function addQualificationAction(formData: FormData) {

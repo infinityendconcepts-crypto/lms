@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   Award,
+  Building2,
   CalendarDays,
   ClipboardCheck,
+  Clock,
   Download,
   FileText,
   GraduationCap,
@@ -19,12 +21,14 @@ import {
   Trash2,
   User,
   Users,
+  Wallet,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireTenant } from "@/lib/tenant";
 import {
   addQualificationAction,
   deleteQualificationAction,
+  saveSponsorshipAction,
   saveStudentProfileAction,
 } from "@/lib/actions/student";
 import { runEligibilityAction } from "@/lib/actions/eligibility";
@@ -36,6 +40,14 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { UploadField } from "@/components/UploadField";
 import { CopyButton } from "@/components/CopyButton";
 import { CustomFieldsEditor, type CustomField } from "@/components/dashboard/CustomFieldsEditor";
+import {
+  SPONSORSHIP_TYPES,
+  SPONSORSHIP_TYPE_LABELS,
+  sponsorshipDuration,
+  sponsorshipLabel,
+  sponsorshipStatus,
+  toSponsorshipDateInput,
+} from "@/lib/sponsorship";
 import { formatDate, pct } from "@/lib/utils";
 
 export const metadata = { title: "Learner profile" };
@@ -124,6 +136,24 @@ export default async function StudentProfilePage({
   const membership = student.memberships[0];
   const profile = student.studentProfiles[0] ?? null;
   const customFields = parseCustomFields(profile?.customFields ?? "[]");
+  const sponsorshipTypeLabel = sponsorshipLabel(profile?.sponsorshipType);
+  const sponsorshipCover = sponsorshipDuration(
+    profile?.sponsorshipStartDate,
+    profile?.sponsorshipEndDate,
+    profile?.sponsorshipMonths
+  );
+  const sponsorshipState = sponsorshipStatus(
+    profile?.sponsorshipStartDate,
+    profile?.sponsorshipEndDate
+  );
+  const sponsorshipStateLabel =
+    sponsorshipState === "ACTIVE"
+      ? "Active"
+      : sponsorshipState === "UPCOMING"
+        ? "Upcoming"
+        : sponsorshipState === "ENDED"
+          ? "Ended"
+          : "Not set";
   const tab = sp.tab ?? "profile";
 
   const graded = student.attempts.filter((attempt) => attempt.status === "GRADED");
@@ -211,7 +241,9 @@ export default async function StudentProfilePage({
                   ? "Qualification removed."
                   : sp.saved === "eligibility"
                     ? "Qualification check complete."
-                    : "Changes saved.")}
+                    : sp.saved === "sponsorship"
+                      ? "Sponsorship saved."
+                      : "Changes saved.")}
         </div>
       )}
 
@@ -249,6 +281,11 @@ export default async function StudentProfilePage({
             },
             { href: `/dashboard/students/${student.id}?tab=eligibility`, label: "Qualification checks", count: checks.length },
             { href: `/dashboard/students/${student.id}?tab=placements`, label: "Pre-assessments", count: placementAttempts.length },
+            {
+              href: `/dashboard/students/${student.id}?tab=sponsorship`,
+              label: "Sponsorship",
+              count: profile?.sponsorshipType ? 1 : undefined,
+            },
           ]}
         />
       </div>
@@ -823,6 +860,181 @@ export default async function StudentProfilePage({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "sponsorship" && (
+        <div className="space-y-5">
+          <section className="card-pad">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                  <Wallet className="size-4 text-brand-500" /> Sponsorship
+                </h2>
+                <p className="mt-1 max-w-2xl text-[11px] leading-5 text-slate-500">
+                  Record how {student.name.split(" ")[0]} is funded, who is paying, and the period covered.
+                </p>
+              </div>
+              <Badge
+                tone={
+                  sponsorshipState === "ACTIVE"
+                    ? "green"
+                    : sponsorshipState === "UPCOMING"
+                      ? "sky"
+                      : sponsorshipState === "ENDED"
+                        ? "slate"
+                        : "amber"
+                }
+              >
+                {sponsorshipStateLabel}
+              </Badge>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+                <p className="stat-label">Type</p>
+                <p className="mt-1 text-sm font-bold text-slate-900">{sponsorshipTypeLabel}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+                <p className="stat-label">Provider</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-800">
+                  {profile?.sponsorshipProvider ?? "—"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+                <p className="stat-label">Duration</p>
+                <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                  <Clock className="size-3.5 text-slate-400" /> {sponsorshipCover}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+                <p className="stat-label">Cover period</p>
+                <p className="mt-1 text-[11px] font-semibold text-slate-800">
+                  {profile?.sponsorshipStartDate
+                    ? `${formatDate(profile.sponsorshipStartDate)} → ${
+                        profile.sponsorshipEndDate ? formatDate(profile.sponsorshipEndDate) : "ongoing"
+                      }`
+                    : "No dates recorded"}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <form action={saveSponsorshipAction} className="card-pad space-y-5">
+            <input type="hidden" name="studentId" value={student.id} />
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <Building2 className="size-4 text-brand-500" /> Sponsorship details
+              </h2>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Choose a sponsorship type and add the sponsor, reference and cover period.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label" htmlFor="sponsorshipType">
+                  Sponsorship type
+                </label>
+                <select
+                  id="sponsorshipType"
+                  name="sponsorshipType"
+                  defaultValue={profile?.sponsorshipType ?? "SELF"}
+                  className="select"
+                >
+                  <option value="">Not set</option>
+                  {SPONSORSHIP_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {SPONSORSHIP_TYPE_LABELS[type]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="sponsorshipProvider">
+                  Sponsor / provider
+                </label>
+                <input
+                  id="sponsorshipProvider"
+                  name="sponsorshipProvider"
+                  defaultValue={profile?.sponsorshipProvider ?? ""}
+                  placeholder="e.g. Northfield Opportunity Fund"
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="sponsorshipReference">
+                  Reference number
+                </label>
+                <input
+                  id="sponsorshipReference"
+                  name="sponsorshipReference"
+                  defaultValue={profile?.sponsorshipReference ?? ""}
+                  placeholder="e.g. BURS-2026-0142"
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="sponsorshipMonths">
+                  Duration (months)
+                </label>
+                <input
+                  id="sponsorshipMonths"
+                  name="sponsorshipMonths"
+                  type="number"
+                  min="0"
+                  max="600"
+                  defaultValue={profile?.sponsorshipMonths ?? ""}
+                  placeholder="e.g. 12"
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="sponsorshipStartDate">
+                  Start date
+                </label>
+                <input
+                  id="sponsorshipStartDate"
+                  name="sponsorshipStartDate"
+                  type="date"
+                  defaultValue={toSponsorshipDateInput(profile?.sponsorshipStartDate)}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="sponsorshipEndDate">
+                  End date
+                </label>
+                <input
+                  id="sponsorshipEndDate"
+                  name="sponsorshipEndDate"
+                  type="date"
+                  defaultValue={toSponsorshipDateInput(profile?.sponsorshipEndDate)}
+                  className="input"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="label" htmlFor="sponsorshipNotes">
+                Notes
+              </label>
+              <textarea
+                id="sponsorshipNotes"
+                name="sponsorshipNotes"
+                rows={3}
+                defaultValue={profile?.sponsorshipNotes ?? ""}
+                placeholder="Payment terms, renewal conditions, work hours…"
+                className="textarea"
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+              <p className="max-w-xl text-[11px] leading-5 text-slate-500">
+                Leave dates blank if the cover period is still being arranged. Duration can be used on its own;
+                end date is calculated from the start date when both are provided.
+              </p>
+              <SubmitButton pendingText="Saving…">
+                <Wallet className="size-3.5" /> Save sponsorship
+              </SubmitButton>
+            </div>
+          </form>
         </div>
       )}
     </div>
