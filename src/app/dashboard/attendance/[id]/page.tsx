@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Download,
   FileText,
+  History,
   KeyRound,
   Percent,
   Save,
@@ -22,9 +23,9 @@ import {
   saveAttendanceAction,
   updateAttendanceSessionAction,
 } from "@/lib/actions/attendance";
-import { Avatar, Badge, PageHeader, Stat } from "@/components/ui";
+import { Avatar, Badge, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import {
   ATTENDANCE_CODE_MINUTES,
   ATTENDANCE_META,
@@ -33,9 +34,44 @@ import {
   attendanceRate,
   countStatuses,
   dateInputValue,
+  isAttendanceStatus,
 } from "@/lib/attendance";
 
 export const metadata = { title: "Attendance register" };
+
+type HistoryTone = "slate" | "green" | "amber" | "red" | "sky";
+type HistoryRecord = { status: string; note: string | null; updatedAt: Date };
+
+function formatClock(date: Date) {
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function historyMark(record?: HistoryRecord | null): {
+  label: string;
+  tone: HistoryTone;
+  dot: string;
+  title: string;
+} {
+  if (!record) return { label: "—", tone: "slate", dot: "bg-slate-300", title: "No mark" };
+  if (!isAttendanceStatus(record.status)) {
+    return { label: record.status, tone: "slate", dot: "bg-slate-300", title: record.status };
+  }
+  const meta = ATTENDANCE_META[record.status];
+  const label =
+    record.status === "PRESENT" || record.status === "LATE"
+      ? "Yes"
+      : record.status === "ABSENT"
+        ? "No"
+        : "Excused";
+  const title = [
+    meta.label,
+    record.note,
+    record.note === "Self check-in" ? formatClock(record.updatedAt) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return { label, tone: meta.tone, dot: meta.dot, title };
+}
 
 export default async function AttendanceRegisterPage({
   params,
@@ -96,6 +132,35 @@ export default async function AttendanceRegisterPage({
     select: { id: true, name: true, email: true, avatarUrl: true },
     orderBy: { name: "asc" },
   });
+
+  // The time-series grid covers every register taken for this course, not just
+  // the one being viewed, so a single register can be read as attendance history.
+  const courseSessions = await db.attendanceSession.findMany({
+    where: { tenantId: ctx.tenant.id, courseId: session.courseId },
+    select: {
+      id: true,
+      date: true,
+      title: true,
+      lesson: { select: { title: true } },
+      records: {
+        select: { studentId: true, status: true, note: true, updatedAt: true },
+      },
+    },
+    orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+  });
+
+  const historyStudentIds = new Set<string>([
+    ...students.map((student) => student.id),
+    ...courseSessions.flatMap((item) => item.records.map((record) => record.studentId)),
+  ]);
+  const historyStudents = await db.user.findMany({
+    where: { id: { in: [...historyStudentIds] } },
+    select: { id: true, name: true, email: true, avatarUrl: true },
+    orderBy: { name: "asc" },
+  });
+  const historyRecords = new Map(
+    courseSessions.map((item) => [item.id, new Map(item.records.map((record) => [record.studentId, record]))])
+  );
 
   const effective = students.map((student) => ({
     student,
@@ -251,6 +316,111 @@ export default async function AttendanceRegisterPage({
             )}
           </div>
         </div>
+      </section>
+
+      <section className="card mt-6 overflow-hidden">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <History className="size-4 text-brand-600" /> Attendance over time
+            </h2>
+            <p className="mt-1 max-w-3xl text-[11px] leading-5 text-slate-500">
+              Every register for {session.course.title}, oldest to newest. Yes means present or late; No means absent.
+              Times appear under learner self check-ins. Select a date to open that register.
+            </p>
+          </div>
+          <Badge tone="brand">{courseSessions.length} registers</Badge>
+        </div>
+        {historyStudents.length === 0 ? (
+          <EmptyState
+            icon={<History className="size-5" />}
+            title="No learners to show"
+            description="Enroll learners on this course to build the attendance history grid."
+          />
+        ) : (
+          <div className="max-h-[32rem] overflow-auto">
+            <table className="table" style={{ minWidth: 320 + courseSessions.length * 112 }}>
+              <thead>
+                <tr>
+                  <th className="sticky top-0 left-0 z-30 w-14 bg-slate-50 px-3 py-3 text-center">No.</th>
+                  <th className="sticky top-0 left-14 z-30 min-w-56 bg-slate-50 px-3 py-3">Learner</th>
+                  {courseSessions.map((item) => {
+                    const current = item.id === session.id;
+                    const day = new Date(item.date);
+                    return (
+                      <th
+                        key={item.id}
+                        className={cn(
+                          "sticky top-0 z-20 min-w-28 px-3 py-3 text-center",
+                          current ? "bg-brand-50/80" : "bg-slate-50/70"
+                        )}
+                      >
+                        <Link
+                          href={`/dashboard/attendance/${item.id}`}
+                          className={cn(
+                            "block text-[11px] font-bold hover:text-brand-700",
+                            current ? "text-brand-700" : "text-slate-700"
+                          )}
+                          title={formatDate(item.date)}
+                        >
+                          {day.toLocaleDateString("en-US", { weekday: "short" })}
+                        </Link>
+                        <Link
+                          href={`/dashboard/attendance/${item.id}`}
+                          className="block text-[10px] font-semibold text-slate-400 hover:text-brand-700"
+                        >
+                          {formatDate(item.date).replace(/,?\s*\d{4}$/, "")}
+                        </Link>
+                        <p className="truncate text-[9px] font-normal text-slate-400">
+                          {item.title || item.lesson?.title || "Register"}
+                        </p>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {historyStudents.map((student, index) => (
+                  <tr key={student.id} className="group">
+                    <td className="sticky left-0 z-10 w-14 bg-white px-3 py-2 text-center text-[11px] text-slate-400 group-hover:bg-slate-50/60">
+                      {index + 1}
+                    </td>
+                    <td className="sticky left-14 z-10 min-w-56 bg-white px-3 py-2 group-hover:bg-slate-50/60">
+                      <div className="flex items-center gap-2">
+                        <Avatar name={student.name} src={student.avatarUrl} size="sm" />
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-slate-900">{student.name}</p>
+                          <p className="truncate text-[10px] text-slate-400">{student.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    {courseSessions.map((item) => {
+                      const record = historyRecords.get(item.id)?.get(student.id);
+                      const mark = historyMark(record);
+                      const current = item.id === session.id;
+                      return (
+                        <td
+                          key={item.id}
+                          className={cn("min-w-28 px-3 py-2 text-center", current && "bg-brand-50/40")}
+                        >
+                          <span title={mark.title} className="inline-flex items-center justify-center gap-1.5">
+                            <span className={cn("size-1.5 rounded-full", mark.dot)} />
+                            <Badge tone={mark.tone}>{mark.label}</Badge>
+                          </span>
+                          {record?.note === "Self check-in" && (
+                            <span className="mt-0.5 block text-[9px] text-slate-400">
+                              {formatClock(record.updatedAt)}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <form action={saveAttendanceAction} className="card mt-6">
