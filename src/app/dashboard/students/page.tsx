@@ -15,6 +15,7 @@ import { canAdmin, requireTenant } from "@/lib/tenant";
 import { inviteMemberAction } from "@/lib/actions/tenant";
 import {
   addLearnerAction,
+  batchInviteLearnerAction,
   bulkLearnerAction,
   importLearnerAction,
 } from "@/lib/actions/people";
@@ -31,6 +32,7 @@ export default async function StudentsPage({
   searchParams: Promise<{
     q?: string;
     added?: string;
+    invites?: string;
     affected?: string;
     skipped?: string;
     detail?: string;
@@ -72,7 +74,12 @@ export default async function StudentsPage({
       orderBy: { createdAt: "desc" },
     }),
     db.invitation.findMany({
-      where: { tenantId: ctx.tenant.id, acceptedAt: null, expiresAt: { gt: new Date() } },
+      where: {
+        tenantId: ctx.tenant.id,
+        role: "STUDENT",
+        acceptedAt: null,
+        expiresAt: { gt: new Date() },
+      },
       orderBy: { createdAt: "desc" },
     }),
     db.course.findMany({
@@ -101,7 +108,12 @@ export default async function StudentsPage({
 
   const banner = sp.error
     ? { tone: "error" as const, message: sp.error }
-    : sp.added
+    : sp.invites
+      ? {
+          tone: "ok" as const,
+          message: `${sp.invites} learner ${sp.invites === "1" ? "invitation" : "invitations"} sent${sp.skipped ? ` · ${sp.skipped} skipped` : ""}. Check the email outbox for join links.`,
+        }
+      : sp.added
       ? {
           tone: "ok" as const,
           message: `${sp.added} learner ${sp.added === "1" ? "account" : "accounts"} added. Temporary passwords were written to the email outbox.`,
@@ -125,6 +137,9 @@ export default async function StudentsPage({
               <>
                 <a href="#add-learner" className="btn-primary btn-sm">
                   <UserPlus className="size-3.5" /> Add learner
+                </a>
+                <a href="#batch-invite-learner" className="btn-secondary btn-sm">
+                  <Mail className="size-3.5" /> Batch invite
                 </a>
                 <a href="#import-learner" className="btn-secondary btn-sm">
                   <FileText className="size-3.5" /> Import CSV
@@ -159,7 +174,7 @@ export default async function StudentsPage({
       </div>
 
       {admin && (
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        <div className="mt-6 grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
           <details id="add-learner" className="card overflow-hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
               <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -201,6 +216,59 @@ export default async function StudentsPage({
             </p>
           </details>
 
+          <details id="batch-invite-learner" className="card overflow-hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
+                  <Mail className="size-3.5" />
+                </span>
+                Batch invite learners
+              </span>
+              <span className="text-[11px] text-slate-400">Sends join links</span>
+            </summary>
+            <form action={batchInviteLearnerAction} className="space-y-3 border-t border-slate-100 p-5">
+              <input type="hidden" name="returnTo" value="/dashboard/students" />
+              <div>
+                <label className="label" htmlFor="learner-invite-file">CSV file (optional)</label>
+                <input id="learner-invite-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
+              </div>
+              <div>
+                <label className="label" htmlFor="learner-invite-course">Enroll invitees in course</label>
+                <select id="learner-invite-course" name="courseId" className="select">
+                  <option value="">No course</option>
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>{course.title}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="learner-invite-emails">Or paste emails</label>
+                <textarea
+                  id="learner-invite-emails"
+                  name="csv"
+                  rows={4}
+                  placeholder={"learner1@school.edu\nlearner2@school.edu"}
+                  className="textarea"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <SubmitButton pendingText="Sending…">
+                  <Mail className="size-3.5" /> Send invites
+                </SubmitButton>
+                <a
+                  href="/templates/learner-people-template.csv"
+                  download
+                  className="text-[11px] font-semibold text-brand-600 hover:underline"
+                >
+                  Download template
+                </a>
+              </div>
+            </form>
+            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+              Upload the template or paste one email per line. Learner invites reserve seats until they expire.
+            </p>
+          </details>
+
           <details id="import-learner" className="card overflow-hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
               <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -211,7 +279,7 @@ export default async function StudentsPage({
               </span>
               <span className="text-[11px] text-slate-400">Up to 200 rows</span>
             </summary>
-            <form action={importLearnerAction} encType="multipart/form-data" className="space-y-3 border-t border-slate-100 p-5">
+            <form action={importLearnerAction} className="space-y-3 border-t border-slate-100 p-5">
               <input type="hidden" name="returnTo" value="/dashboard/students" />
               <div>
                 <label className="label" htmlFor="learner-csv-file">CSV file</label>
@@ -236,9 +304,18 @@ export default async function StudentsPage({
                   className="textarea"
                 />
               </div>
-              <SubmitButton pendingText="Importing…">
-                <FileText className="size-3.5" /> Import learners
-              </SubmitButton>
+              <div className="flex flex-wrap items-center gap-3">
+                <SubmitButton pendingText="Importing…">
+                  <FileText className="size-3.5" /> Import learners
+                </SubmitButton>
+                <a
+                  href="/templates/learner-people-template.csv"
+                  download
+                  className="text-[11px] font-semibold text-brand-600 hover:underline"
+                >
+                  Download template
+                </a>
+              </div>
             </form>
             <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
               Columns: <code>name</code>, <code>email</code>, <code>course</code>. The course column accepts a

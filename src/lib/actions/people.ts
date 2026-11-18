@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireTenant, ROLE_LABELS, type Role } from "@/lib/tenant";
-import { hashPassword, newToken } from "@/lib/password";
+import { hashPassword, newToken, tokenHash } from "@/lib/password";
 import { assertSeatAvailable, getPlanState } from "@/lib/usage";
 import { audit } from "@/lib/audit";
 import { appUrl, sendEmail } from "@/lib/email";
@@ -304,6 +304,176 @@ async function readCsv(formData: FormData): Promise<{ text: string; error?: stri
   if (!text.trim()) return { text: "", error: "Upload a CSV file or paste CSV text" };
   if (text.length > MAX_CSV_BYTES) return { text: "", error: "CSV imports are limited to 500 KB" };
   return { text };
+}
+
+type InviteEntry = { line: number; email: string; course: string };
+
+/** Accepts either a CSV with an email column or a plain one-per-line list. */
+function parseInviteEntries(text: string): InviteEntry[] {
+  const parsed = parsePeopleCsv(text);
+  if (parsed.errors.length === 0 && parsed.people.length > 0) {
+    return parsed.people.map((row) => ({ line: row.line, email: row.email, course: row.course }));
+  }
+  return text
+    .split(/[\n,;]+/)
+    .map((value, index) => ({ line: index + 1, email: value.trim(), course: "" }))
+    .filter((entry) => entry.email.length > 0 && !/^email$/i.test(entry.email));
+}
+
+async function batchInvitePeople(formData: FormData, kind: PersonKind) {
+  const ctx = await requireTenant("ADMIN");
+  const source = await readCsv(formData);
+  if (source.error) peopleRedirect(formData, { error: source.error });
+
+  const entries = parseInviteEntries(source.text);
+  if (entries.length === 0) peopleRedirect(formData, { error: "Add at least one email address" });
+  if (entries.length > MAX_IMPORT_ROWS) {
+    peopleRedirect(formData, { error: `Invite up to ${MAX_IMPORT_ROWS} people at a time` });
+  }
+
+  const role: Role = kind === "learner" ? "STUDENT" : asStaffRole(String(formData.get("role") ?? "")) ?? "MODERATOR";
+  const fallbackCourseId = String(formData.get("courseId") ?? "") || null;
+  const fallbackCourse = fallbackCourseId ? await findCourse(ctx, fallbackCourseId) : null;
+  if (fallbackCourseId && !fallbackCourse) peopleRedirect(formData, { error: "Course not found" });
+
+  const courses = await db.course.findMany({
+    where: { tenantId: ctx.tenant.id },
+    select: { id: true, title: true },
+  });
+  const courseByTitle = new Map(courses.map((course) => [course.title.toLowerCase(), course.id]));
+  const courseById = new Set(courses.map((course) => course.id));
+
+  const emailSchema = personSchema.shape.email;
+  const seen = new Set<string>();
+  const reasons: string[] = [];
+  const recipients: { line: number; email: string; courseId: string | null }[] = [];
+
+  for (const entry of entries) {
+    const result = emailSchema.safeParse(entry.email);
+    if (!result.success) {
+      reasons.push(`Line ${entry.line}: invalid email`);
+      continue;
+    }
+    const email = result.data;
+    if (seen.has(email)) {
+      reasons.push(`Line ${entry.line}: duplicate email`);
+      continue;
+    }
+    seen.add(email);
+
+    let courseId: string | null = null;
+    if (kind === "learner") {
+      const wanted = entry.course || fallbackCourse?.id || "";
+      if (wanted) {
+        if (courseById.has(wanted)) courseId = wanted;
+        else if (courseByTitle.has(wanted.toLowerCase())) courseId = courseByTitle.get(wanted.toLowerCase()) ?? null;
+        else {
+          reasons.push(`Line ${entry.line}: course not found`);
+          continue;
+        }
+      }
+    }
+    recipients.push({ line: entry.line, email, courseId });
+  }
+
+  if (recipients.length === 0) peopleRedirect(formData, { error: "No valid recipient emails found" });
+
+  const emails = recipients.map((recipient) => recipient.email);
+  const existingUsers = await db.user.findMany({
+    where: { email: { in: emails } },
+    select: { id: true, email: true },
+  });
+  const existingIds = existingUsers.map((user) => user.id);
+  const existingMemberships = existingIds.length
+    ? await db.membership.findMany({
+        where: { tenantId: ctx.tenant.id, userId: { in: existingIds } },
+        select: { userId: true },
+      })
+    : [];
+  const memberUserIds = new Set(existingMemberships.map((membership) => membership.userId));
+  const memberEmails = new Set(
+    existingUsers.filter((user) => memberUserIds.has(user.id)).map((user) => user.email)
+  );
+
+  const pending = await db.invitation.findMany({
+    where: {
+      tenantId: ctx.tenant.id,
+      role: "STUDENT",
+      acceptedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    select: { email: true },
+  });
+  const reservedEmails = new Set(pending.map((invite) => invite.email));
+
+  const state = kind === "learner" ? await getPlanState(ctx.tenant.id) : null;
+  let seatsLeft = state?.seatsLeft ?? null;
+  if (seatsLeft !== null) {
+    for (const email of reservedEmails) {
+      if (!memberEmails.has(email)) seatsLeft = Math.max(0, seatsLeft - 1);
+    }
+  }
+
+  let invited = 0;
+  for (const recipient of recipients) {
+    if (memberEmails.has(recipient.email)) {
+      reasons.push(`Line ${recipient.line}: already a member`);
+      continue;
+    }
+    if (kind === "learner" && seatsLeft !== null && seatsLeft <= 0 && !reservedEmails.has(recipient.email)) {
+      reasons.push(`Line ${recipient.line}: no learner seats available`);
+      continue;
+    }
+
+    const token = newToken();
+    await db.invitation.deleteMany({
+      where: { tenantId: ctx.tenant.id, email: recipient.email, acceptedAt: null },
+    });
+    await db.invitation.create({
+      data: {
+        tenantId: ctx.tenant.id,
+        email: recipient.email,
+        role,
+        courseId: recipient.courseId,
+        invitedById: ctx.user.id,
+        tokenHash: tokenHash(token),
+        expiresAt: new Date(Date.now() + 7 * 86_400_000),
+      },
+    });
+    await sendEmail({
+      to: recipient.email,
+      tenantId: ctx.tenant.id,
+      kind: "INVITATION",
+      subject: `${ctx.user.name} invited you to ${ctx.tenant.name}`,
+      body: `You've been invited to join ${ctx.tenant.name} on Nkanyezi as ${(ROLE_LABELS[role] ?? role).toLowerCase()}.\n\nAccept your invitation:\n${appUrl(`/join/${token}`)}\n\nThis link expires in 7 days.`,
+    });
+
+    invited += 1;
+    reservedEmails.add(recipient.email);
+    if (kind === "learner" && seatsLeft !== null) seatsLeft = Math.max(0, seatsLeft - 1);
+  }
+
+  await audit({
+    tenantId: ctx.tenant.id,
+    actorId: ctx.user.id,
+    action: kind === "staff" ? "staff.invite_batch" : "learner.invite_batch",
+    target: `${invited} invited`,
+    meta: { role, invited, skipped: entries.length - invited, detail: reasons.slice(0, 8).join(" | ") },
+  });
+  await revalidatePeoplePages();
+  peopleRedirect(formData, {
+    invites: invited,
+    skipped: entries.length - invited,
+    detail: reasons.slice(0, 3).join(" · ").slice(0, 240),
+  });
+}
+
+export async function batchInviteStaffAction(formData: FormData) {
+  await batchInvitePeople(formData, "staff");
+}
+
+export async function batchInviteLearnerAction(formData: FormData) {
+  await batchInvitePeople(formData, "learner");
 }
 
 async function importPeople(formData: FormData, kind: PersonKind) {

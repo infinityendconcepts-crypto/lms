@@ -24,6 +24,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
 import {
   addStaffAction,
+  batchInviteStaffAction,
   bulkStaffAction,
   importStaffAction,
 } from "@/lib/actions/people";
@@ -49,6 +50,7 @@ export default async function StaffPage({
     invited?: string;
     removed?: string;
     added?: string;
+    invites?: string;
     affected?: string;
     skipped?: string;
     detail?: string;
@@ -78,7 +80,12 @@ export default async function StaffPage({
 
   const banner = sp.error
     ? { tone: "error" as const, message: sp.error }
-    : sp.added
+    : sp.invites
+      ? {
+          tone: "ok" as const,
+          message: `${sp.invites} staff ${sp.invites === "1" ? "invitation" : "invitations"} sent${sp.skipped ? ` · ${sp.skipped} skipped` : ""}. Check the email outbox for join links.`,
+        }
+      : sp.added
       ? {
           tone: "ok" as const,
           message: `${sp.added} staff ${sp.added === "1" ? "account" : "accounts"} added. Temporary passwords were written to the email outbox.`,
@@ -108,6 +115,9 @@ export default async function StaffPage({
               <>
                 <a href="#add-staff" className="btn-primary btn-sm">
                   <UserPlus className="size-3.5" /> Add staff
+                </a>
+                <a href="#batch-invite-staff" className="btn-secondary btn-sm">
+                  <Mail className="size-3.5" /> Batch invite
                 </a>
                 <a href="#import-staff" className="btn-secondary btn-sm">
                   <FileText className="size-3.5" /> Import CSV
@@ -157,7 +167,7 @@ export default async function StaffPage({
       </div>
 
       {admin && (
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        <div className="mt-6 grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
           <details id="add-staff" className="card overflow-hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
               <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -199,6 +209,59 @@ export default async function StaffPage({
             </p>
           </details>
 
+          <details id="batch-invite-staff" className="card overflow-hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
+                  <Mail className="size-3.5" />
+                </span>
+                Batch invite staff
+              </span>
+              <span className="text-[11px] text-slate-400">Sends join links</span>
+            </summary>
+            <form action={batchInviteStaffAction} className="space-y-3 border-t border-slate-100 p-5">
+              <input type="hidden" name="returnTo" value="/dashboard/staff" />
+              <div>
+                <label className="label" htmlFor="staff-invite-file">CSV file (optional)</label>
+                <input id="staff-invite-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
+              </div>
+              <div>
+                <label className="label" htmlFor="staff-invite-role">Role for these invitations</label>
+                <select id="staff-invite-role" name="role" defaultValue="MODERATOR" className="select">
+                  <option value="MODERATOR">Moderator</option>
+                  <option value="TEACHER">Teacher</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="staff-invite-emails">Or paste emails</label>
+                <textarea
+                  id="staff-invite-emails"
+                  name="csv"
+                  rows={4}
+                  placeholder={"colleague1@school.edu\ncolleague2@school.edu"}
+                  className="textarea"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <SubmitButton pendingText="Sending…">
+                  <Mail className="size-3.5" /> Send invites
+                </SubmitButton>
+                <a
+                  href="/templates/staff-people-template.csv"
+                  download
+                  className="text-[11px] font-semibold text-brand-600 hover:underline"
+                >
+                  Download template
+                </a>
+              </div>
+            </form>
+            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+              Upload the template or paste one email per line. Existing members are skipped; pending invites are
+              replaced.
+            </p>
+          </details>
+
           <details id="import-staff" className="card overflow-hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
               <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -209,7 +272,7 @@ export default async function StaffPage({
               </span>
               <span className="text-[11px] text-slate-400">Up to 200 rows</span>
             </summary>
-            <form action={importStaffAction} encType="multipart/form-data" className="space-y-3 border-t border-slate-100 p-5">
+            <form action={importStaffAction} className="space-y-3 border-t border-slate-100 p-5">
               <input type="hidden" name="returnTo" value="/dashboard/staff" />
               <div>
                 <label className="label" htmlFor="staff-csv-file">CSV file</label>
@@ -233,9 +296,18 @@ export default async function StaffPage({
                   className="textarea"
                 />
               </div>
-              <SubmitButton pendingText="Importing…">
-                <FileText className="size-3.5" /> Import staff
-              </SubmitButton>
+              <div className="flex flex-wrap items-center gap-3">
+                <SubmitButton pendingText="Importing…">
+                  <FileText className="size-3.5" /> Import staff
+                </SubmitButton>
+                <a
+                  href="/templates/staff-people-template.csv"
+                  download
+                  className="text-[11px] font-semibold text-brand-600 hover:underline"
+                >
+                  Download template
+                </a>
+              </div>
             </form>
             <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
               Columns: <code>name</code>, <code>email</code>, <code>role</code>. Roles may be Moderator, Teacher or
