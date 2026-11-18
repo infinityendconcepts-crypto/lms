@@ -1,10 +1,26 @@
 import Link from "next/link";
-import { ArrowRight, GraduationCap, Mail, Search, UserPlus, Users } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  FileText,
+  GraduationCap,
+  ListChecks,
+  Mail,
+  Search,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { db } from "@/lib/db";
-import { requireTenant } from "@/lib/tenant";
+import { canAdmin, requireTenant } from "@/lib/tenant";
 import { inviteMemberAction } from "@/lib/actions/tenant";
+import {
+  addLearnerAction,
+  bulkLearnerAction,
+  importLearnerAction,
+} from "@/lib/actions/people";
 import { Avatar, Badge, EmptyState, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
+import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
 import { formatDate, pct } from "@/lib/utils";
 
 export const metadata = { title: "Learners" };
@@ -12,10 +28,18 @@ export const metadata = { title: "Learners" };
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    added?: string;
+    affected?: string;
+    skipped?: string;
+    detail?: string;
+    error?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const ctx = await requireTenant("TEACHER");
+  const admin = canAdmin(ctx.role);
   const query = sp.q?.trim() ?? "";
 
   const [memberships, invitations, courses] = await Promise.all([
@@ -75,6 +99,20 @@ export default async function StudentsPage({
     ? Math.round(averages.reduce((sum, n) => sum + n, 0) / averages.length)
     : 0;
 
+  const banner = sp.error
+    ? { tone: "error" as const, message: sp.error }
+    : sp.added
+      ? {
+          tone: "ok" as const,
+          message: `${sp.added} learner ${sp.added === "1" ? "account" : "accounts"} added. Temporary passwords were written to the email outbox.`,
+        }
+      : sp.affected
+        ? {
+            tone: "ok" as const,
+            message: `${sp.affected} learner ${sp.affected === "1" ? "record" : "records"} updated${sp.skipped ? ` · ${sp.skipped} skipped` : ""}.`,
+          }
+        : null;
+
   return (
     <div>
       <PageHeader
@@ -82,11 +120,36 @@ export default async function StudentsPage({
         title="Learners"
         subtitle="Everyone learning in this workspace, their courses and their performance."
         actions={
-          <a href="#invite-learner" className="btn-primary btn-sm">
-            <UserPlus className="size-3.5" /> Invite learner
-          </a>
+          <>
+            {admin && (
+              <>
+                <a href="#add-learner" className="btn-primary btn-sm">
+                  <UserPlus className="size-3.5" /> Add learner
+                </a>
+                <a href="#import-learner" className="btn-secondary btn-sm">
+                  <FileText className="size-3.5" /> Import CSV
+                </a>
+              </>
+            )}
+            <a href="#invite-learner" className="btn-secondary btn-sm">
+              <Mail className="size-3.5" /> Invite learner
+            </a>
+          </>
         }
       />
+
+      {banner && (
+        <div
+          className={`mb-5 rounded-xl border px-4 py-3 text-sm ${
+            banner.tone === "error"
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          {banner.message}
+          {sp.detail && <p className="mt-1 text-xs opacity-80">{sp.detail}</p>}
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Learners" value={totalLearners} icon={<Users className="size-4" />} />
@@ -94,6 +157,96 @@ export default async function StudentsPage({
         <Stat label="Pending invites" value={invitations.length} hint="awaiting acceptance" icon={<Mail className="size-4" />} />
         <Stat label="Class average" value={`${classAverage}%`} hint={`${averages.length} learners with grades`} icon={<GraduationCap className="size-4" />} />
       </div>
+
+      {admin && (
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <details id="add-learner" className="card overflow-hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
+                  <UserPlus className="size-3.5" />
+                </span>
+                Add learner directly
+              </span>
+              <span className="text-[11px] text-slate-400">Uses one learner seat</span>
+            </summary>
+            <form
+              action={addLearnerAction}
+              className="grid gap-3 border-t border-slate-100 p-5 sm:grid-cols-[1fr_1.2fr_1fr_auto] sm:items-end"
+            >
+              <input type="hidden" name="returnTo" value="/dashboard/students" />
+              <div>
+                <label className="label" htmlFor="learner-add-name">Full name</label>
+                <input id="learner-add-name" name="name" required placeholder="Lerato Dlamini" className="input" />
+              </div>
+              <div>
+                <label className="label" htmlFor="learner-add-email">Email address</label>
+                <input id="learner-add-email" name="email" type="email" required placeholder="lerato@school.edu" className="input" />
+              </div>
+              <div>
+                <label className="label" htmlFor="learner-add-course">Enroll in course</label>
+                <select id="learner-add-course" name="courseId" className="select">
+                  <option value="">No course yet</option>
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>{course.title}</option>
+                  ))}
+                </select>
+              </div>
+              <SubmitButton pendingText="Adding…">
+                <CheckCircle2 className="size-3.5" /> Add learner
+              </SubmitButton>
+            </form>
+            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+              The account is active immediately. A temporary password is written to the email outbox.
+            </p>
+          </details>
+
+          <details id="import-learner" className="card overflow-hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
+                  <FileText className="size-3.5" />
+                </span>
+                Import learners from CSV
+              </span>
+              <span className="text-[11px] text-slate-400">Up to 200 rows</span>
+            </summary>
+            <form action={importLearnerAction} encType="multipart/form-data" className="space-y-3 border-t border-slate-100 p-5">
+              <input type="hidden" name="returnTo" value="/dashboard/students" />
+              <div>
+                <label className="label" htmlFor="learner-csv-file">CSV file</label>
+                <input id="learner-csv-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
+              </div>
+              <div>
+                <label className="label" htmlFor="learner-csv-course">Default course when the CSV has no course column</label>
+                <select id="learner-csv-course" name="courseId" className="select">
+                  <option value="">No course</option>
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>{course.title}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="learner-csv-text">Or paste CSV</label>
+                <textarea
+                  id="learner-csv-text"
+                  name="csv"
+                  rows={4}
+                  placeholder={"name,email,course\nLerato Dlamini,lerato@school.edu,Algebra I"}
+                  className="textarea"
+                />
+              </div>
+              <SubmitButton pendingText="Importing…">
+                <FileText className="size-3.5" /> Import learners
+              </SubmitButton>
+            </form>
+            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+              Columns: <code>name</code>, <code>email</code>, <code>course</code>. The course column accepts a
+              course title or ID. Learners beyond your plan&apos;s seats are skipped.
+            </p>
+          </details>
+        </div>
+      )}
 
       <details id="invite-learner" className="card mt-6 mb-6 overflow-hidden">
         <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
@@ -157,6 +310,47 @@ export default async function StudentsPage({
         )}
       </form>
 
+      {admin && memberships.length > 0 && (
+        <form id="learner-bulk-form" action={bulkLearnerAction} className="card mb-4 flex flex-wrap items-end gap-3 p-4">
+          <input type="hidden" name="returnTo" value="/dashboard/students" />
+          <SelectAllCheckbox scopeId="learner-list" />
+          <div>
+            <label className="label" htmlFor="learner-bulk-action">Batch action</label>
+            <select id="learner-bulk-action" name="bulkAction" className="select !w-40">
+              <option value="enroll">Enroll in course</option>
+              <option value="role">Change role</option>
+              <option value="remove">Remove from workspace</option>
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="learner-bulk-course">Course</label>
+            <select id="learner-bulk-course" name="courseId" className="select !w-44">
+              <option value="">Choose a course</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>{course.title}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="learner-bulk-role">New role</label>
+            <select id="learner-bulk-role" name="role" className="select !w-36" defaultValue="MODERATOR">
+              <option value="MODERATOR">Moderator</option>
+              <option value="TEACHER">Teacher</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+          <SubmitButton
+            variant="secondary"
+            confirm="Apply this batch action to the selected learners?"
+          >
+            <ListChecks className="size-3.5" /> Apply to selected
+          </SubmitButton>
+          <p className="w-full text-[10px] text-slate-400">
+            Select learners in the table below. Changing a role to staff removes them from the learner count.
+          </p>
+        </form>
+      )}
+
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-bold text-slate-900">
           {query ? `${memberships.length} match${memberships.length === 1 ? "" : "es"}` : "All learners"}
@@ -185,10 +379,11 @@ export default async function StudentsPage({
           }
         />
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap" id="learner-list">
           <table className="table">
             <thead>
               <tr>
+                <th className="w-8">{admin && <span className="sr-only">Select</span>}</th>
                 <th>Learner</th>
                 <th>Status</th>
                 <th>Courses</th>
@@ -209,6 +404,19 @@ export default async function StudentsPage({
                   : null;
                 return (
                   <tr key={membership.id}>
+                    <td>
+                      {admin && membership.role !== "OWNER" && membership.userId !== ctx.user.id && (
+                        <input
+                          type="checkbox"
+                          form="learner-bulk-form"
+                          name="memberIds"
+                          value={membership.id}
+                          data-person-id={membership.id}
+                          aria-label={`Select ${learner.name}`}
+                          className="size-3.5"
+                        />
+                      )}
+                    </td>
                     <td>
                       <div className="flex items-center gap-2">
                         <Avatar name={learner.name} src={learner.avatarUrl} size="sm" />

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import {
+  CheckCircle2,
   Clock3,
+  FileText,
+  ListChecks,
   Mail,
   ShieldCheck,
   Trash2,
@@ -18,6 +21,12 @@ import {
 } from "@/lib/actions/tenant";
 import { Avatar, Badge, PageHeader, Stat } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
+import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
+import {
+  addStaffAction,
+  bulkStaffAction,
+  importStaffAction,
+} from "@/lib/actions/people";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Staff" };
@@ -39,6 +48,10 @@ export default async function StaffPage({
     saved?: string;
     invited?: string;
     removed?: string;
+    added?: string;
+    affected?: string;
+    skipped?: string;
+    detail?: string;
     error?: string;
   }>;
 }) {
@@ -65,13 +78,23 @@ export default async function StaffPage({
 
   const banner = sp.error
     ? { tone: "error" as const, message: sp.error }
-    : sp.invited
-      ? { tone: "ok" as const, message: `Invitation sent to ${sp.invited}. Check the email outbox for the join link.` }
-      : sp.removed
-        ? { tone: "ok" as const, message: "Staff member removed from this workspace." }
-        : sp.saved
-          ? { tone: "ok" as const, message: "Role updated." }
-          : null;
+    : sp.added
+      ? {
+          tone: "ok" as const,
+          message: `${sp.added} staff ${sp.added === "1" ? "account" : "accounts"} added. Temporary passwords were written to the email outbox.`,
+        }
+      : sp.affected
+        ? {
+            tone: "ok" as const,
+            message: `${sp.affected} staff ${sp.affected === "1" ? "member" : "members"} updated${sp.skipped ? ` · ${sp.skipped} skipped` : ""}.`,
+          }
+        : sp.invited
+          ? { tone: "ok" as const, message: `Invitation sent to ${sp.invited}. Check the email outbox for the join link.` }
+          : sp.removed
+            ? { tone: "ok" as const, message: "Staff member removed from this workspace." }
+            : sp.saved
+              ? { tone: "ok" as const, message: "Role updated." }
+              : null;
 
   return (
     <div>
@@ -81,6 +104,16 @@ export default async function StaffPage({
         subtitle="Everyone who can teach, grade or moderate in this workspace, and what they can do."
         actions={
           <>
+            {admin && (
+              <>
+                <a href="#add-staff" className="btn-primary btn-sm">
+                  <UserPlus className="size-3.5" /> Add staff
+                </a>
+                <a href="#import-staff" className="btn-secondary btn-sm">
+                  <FileText className="size-3.5" /> Import CSV
+                </a>
+              </>
+            )}
             <Link href="/dashboard/moderation" className="btn-secondary btn-sm">
               <ShieldCheck className="size-3.5" /> Moderation
             </Link>
@@ -100,6 +133,7 @@ export default async function StaffPage({
           }`}
         >
           {banner.message}
+          {sp.detail && <p className="mt-1 text-xs opacity-80">{sp.detail}</p>}
         </div>
       )}
 
@@ -122,8 +156,128 @@ export default async function StaffPage({
         />
       </div>
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-[1.7fr_1fr]">
-        <div className="table-wrap">
+      {admin && (
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <details id="add-staff" className="card overflow-hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
+                  <UserPlus className="size-3.5" />
+                </span>
+                Add staff directly
+              </span>
+              <span className="text-[11px] text-slate-400">Creates the account now</span>
+            </summary>
+            <form
+              action={addStaffAction}
+              className="grid gap-3 border-t border-slate-100 p-5 sm:grid-cols-[1fr_1.3fr_1fr_auto] sm:items-end"
+            >
+              <input type="hidden" name="returnTo" value="/dashboard/staff" />
+              <div>
+                <label className="label" htmlFor="staff-add-name">Full name</label>
+                <input id="staff-add-name" name="name" required placeholder="Amina Patel" className="input" />
+              </div>
+              <div>
+                <label className="label" htmlFor="staff-add-email">Email address</label>
+                <input id="staff-add-email" name="email" type="email" required placeholder="amina@school.edu" className="input" />
+              </div>
+              <div>
+                <label className="label" htmlFor="staff-add-role">Role</label>
+                <select id="staff-add-role" name="role" defaultValue="MODERATOR" className="select">
+                  <option value="MODERATOR">Moderator</option>
+                  <option value="TEACHER">Teacher</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+              <SubmitButton pendingText="Adding…">
+                <CheckCircle2 className="size-3.5" /> Add staff
+              </SubmitButton>
+            </form>
+            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+              New people receive a temporary password in the email outbox. Existing Nkanyezi accounts are linked
+              to this workspace without changing their password.
+            </p>
+          </details>
+
+          <details id="import-staff" className="card overflow-hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-brand-600 text-white">
+                  <FileText className="size-3.5" />
+                </span>
+                Import staff from CSV
+              </span>
+              <span className="text-[11px] text-slate-400">Up to 200 rows</span>
+            </summary>
+            <form action={importStaffAction} encType="multipart/form-data" className="space-y-3 border-t border-slate-100 p-5">
+              <input type="hidden" name="returnTo" value="/dashboard/staff" />
+              <div>
+                <label className="label" htmlFor="staff-csv-file">CSV file</label>
+                <input id="staff-csv-file" name="file" type="file" accept=".csv,text/csv" className="input !py-2" />
+              </div>
+              <div>
+                <label className="label" htmlFor="staff-csv-role">Default role when the CSV has no role column</label>
+                <select id="staff-csv-role" name="role" defaultValue="MODERATOR" className="select">
+                  <option value="MODERATOR">Moderator</option>
+                  <option value="TEACHER">Teacher</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="staff-csv-text">Or paste CSV</label>
+                <textarea
+                  id="staff-csv-text"
+                  name="csv"
+                  rows={4}
+                  placeholder={"name,email,role\nAmina Patel,amina@school.edu,TEACHER"}
+                  className="textarea"
+                />
+              </div>
+              <SubmitButton pendingText="Importing…">
+                <FileText className="size-3.5" /> Import staff
+              </SubmitButton>
+            </form>
+            <p className="px-5 pb-4 text-[10px] leading-4 text-slate-400">
+              Columns: <code>name</code>, <code>email</code>, <code>role</code>. Roles may be Moderator, Teacher or
+              Admin. Invalid and duplicate rows are skipped and reported.
+            </p>
+          </details>
+        </div>
+      )}
+
+      {admin && staff.length > 0 && (
+        <form id="staff-bulk-form" action={bulkStaffAction} className="card mb-4 mt-6 flex flex-wrap items-end gap-3 p-4">
+          <input type="hidden" name="returnTo" value="/dashboard/staff" />
+          <SelectAllCheckbox scopeId="staff-list" />
+          <div>
+            <label className="label" htmlFor="staff-bulk-action">Batch action</label>
+            <select id="staff-bulk-action" name="bulkAction" className="select !w-40">
+              <option value="role">Change role</option>
+              <option value="remove">Remove from workspace</option>
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="staff-bulk-role">New role</label>
+            <select id="staff-bulk-role" name="role" className="select !w-36" defaultValue="MODERATOR">
+              <option value="MODERATOR">Moderator</option>
+              <option value="TEACHER">Teacher</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+          <SubmitButton
+            variant="secondary"
+            confirm="Apply this batch action to the selected staff members?"
+          >
+            <ListChecks className="size-3.5" /> Apply to selected
+          </SubmitButton>
+          <p className="w-full text-[10px] text-slate-400">
+            Select people in the table below. Owners and your own account are protected.
+          </p>
+        </form>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-[1.7fr_1fr]">
+        <div className="table-wrap" id="staff-list">
           <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-3">
             <h2 className="flex items-center gap-2 text-xs font-bold text-slate-900">
               <UserCog className="size-3.5 text-slate-400" /> Staff directory ({staff.length})
@@ -135,6 +289,7 @@ export default async function StaffPage({
           <table className="table">
             <thead>
               <tr>
+                <th className="w-8">{admin && <span className="sr-only">Select</span>}</th>
                 <th>Person</th>
                 <th>Role</th>
                 <th>Joined</th>
@@ -147,6 +302,19 @@ export default async function StaffPage({
                   membership.role === "OWNER" || membership.userId === ctx.user.id;
                 return (
                   <tr key={membership.id}>
+                    <td>
+                      {admin && !protectedRow && (
+                        <input
+                          type="checkbox"
+                          form="staff-bulk-form"
+                          name="memberIds"
+                          value={membership.id}
+                          data-person-id={membership.id}
+                          aria-label={`Select ${membership.user.name}`}
+                          className="size-3.5"
+                        />
+                      )}
+                    </td>
                     <td>
                       <div className="flex items-center gap-2">
                         <Avatar
