@@ -25,6 +25,7 @@ export default async function DashboardLayout({
       ? trialDaysLeft(ctx.tenant.subscription.currentPeriodEnd)
       : 0;
   const admin = ["OWNER", "ADMIN"].includes(ctx.role);
+  const monitor = ctx.role === "MONITOR";
   const memberships = ctx.memberships.map((m) => ({
     tenantId: m.tenantId,
     name: m.tenant.name,
@@ -68,31 +69,33 @@ export default async function DashboardLayout({
         </div>
 
         <div className="mt-4 space-y-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-bold text-slate-800">{plan.name} plan</p>
-              {trialLeft > 0 ? (
-                <span className="badge bg-amber-50 text-amber-700">{trialLeft}d trial</span>
-              ) : (
-                <span className="badge bg-emerald-50 text-emerald-700">Active</span>
+          {!monitor && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold text-slate-800">{plan.name} plan</p>
+                {trialLeft > 0 ? (
+                  <span className="badge bg-amber-50 text-amber-700">{trialLeft}d trial</span>
+                ) : (
+                  <span className="badge bg-emerald-50 text-emerald-700">Active</span>
+                )}
+              </div>
+              <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                {plan.seats === null ? "Unlimited learners" : `${plan.seats} learner seats`} ·{" "}
+                {plan.courses === null ? "unlimited courses" : `${plan.courses} courses`}
+              </p>
+              {admin && (
+                <Link
+                  href="/dashboard/billing"
+                  className="mt-2.5 flex items-center justify-between rounded-lg bg-brand-50 px-2.5 py-1.5 text-[10px] font-semibold text-brand-700 transition hover:bg-brand-100"
+                >
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="size-3" /> Manage plan
+                  </span>
+                  <ArrowUpRight className="size-3" />
+                </Link>
               )}
             </div>
-            <p className="mt-1 text-[10px] leading-4 text-slate-500">
-              {plan.seats === null ? "Unlimited learners" : `${plan.seats} learner seats`} ·{" "}
-              {plan.courses === null ? "unlimited courses" : `${plan.courses} courses`}
-            </p>
-            {admin && (
-              <Link
-                href="/dashboard/billing"
-                className="mt-2.5 flex items-center justify-between rounded-lg bg-brand-50 px-2.5 py-1.5 text-[10px] font-semibold text-brand-700 transition hover:bg-brand-100"
-              >
-                <span className="flex items-center gap-1">
-                  <Sparkles className="size-3" /> Manage plan
-                </span>
-                <ArrowUpRight className="size-3" />
-              </Link>
-            )}
-          </div>
+          )}
 
           <div className="flex items-center gap-2.5 rounded-2xl px-1">
             <Avatar name={ctx.user.name} src={ctx.user.avatarUrl} size="sm" />
@@ -122,6 +125,7 @@ export default async function DashboardLayout({
               unreadCount={unreadMessages}
               tenantName={ctx.tenant.name}
               userName={ctx.user.name}
+              showPlan={!monitor}
             />
             <Link href="/dashboard" className="lg:hidden">
               <Logo

@@ -57,6 +57,7 @@ async function reset() {
   await db.auditLog.deleteMany();
   await db.session.deleteMany();
   await db.passwordReset.deleteMany();
+  await db.monitorAssignment.deleteMany();
   await db.membership.deleteMany();
   await db.promoRedemption.deleteMany();
   await db.promoCode.deleteMany();
@@ -182,6 +183,30 @@ async function main() {
   const ethan = await db.user.create({
     data: { email: "ethan@northfield.edu", name: "Ethan Cole", passwordHash },
   });
+  const parentMonitor = await db.user.create({
+    data: {
+      email: "parent@northfield.edu",
+      name: "Thandi Ndlovu",
+      passwordHash,
+      timezone: "America/New_York",
+    },
+  });
+  const sponsorMonitor = await db.user.create({
+    data: {
+      email: "sponsor@northfield.edu",
+      name: "Amina Patel",
+      passwordHash,
+      timezone: "America/New_York",
+    },
+  });
+  const companyMonitor = await db.user.create({
+    data: {
+      email: "company@northfield.edu",
+      name: "Daniel Okafor",
+      passwordHash,
+      timezone: "America/New_York",
+    },
+  });
   const maya = await db.user.create({
     data: {
       email: "maya@studiomath.io",
@@ -265,6 +290,76 @@ async function main() {
 
   // The super admin belongs to Northfield too, so they can inspect the tenant UI.
   await db.membership.create({ data: { tenantId: northfield.id, userId: admin.id, role: "ADMIN" } });
+
+  // Northfield monitors and the learners they are responsible for.
+  const parentMonitorMembership = await db.membership.create({
+    data: {
+      tenantId: northfield.id,
+      userId: parentMonitor.id,
+      role: "MONITOR",
+      monitorType: "PARENT",
+      monitorOrganization: "Ndlovu family",
+    },
+  });
+  const sponsorMonitorMembership = await db.membership.create({
+    data: {
+      tenantId: northfield.id,
+      userId: sponsorMonitor.id,
+      role: "MONITOR",
+      monitorType: "SPONSOR",
+      monitorOrganization: "Future Leaders Fund",
+    },
+  });
+  const companyMonitorMembership = await db.membership.create({
+    data: {
+      tenantId: northfield.id,
+      userId: companyMonitor.id,
+      role: "MONITOR",
+      monitorType: "COMPANY",
+      monitorOrganization: "Cape Tech Collective",
+    },
+  });
+
+  await db.monitorAssignment.createMany({
+    data: [
+      {
+        tenantId: northfield.id,
+        monitorId: parentMonitorMembership.id,
+        learnerId: priya.id,
+        createdById: elena.id,
+      },
+      {
+        tenantId: northfield.id,
+        monitorId: parentMonitorMembership.id,
+        learnerId: sofia.id,
+        createdById: elena.id,
+      },
+      {
+        tenantId: northfield.id,
+        monitorId: sponsorMonitorMembership.id,
+        learnerId: aisha.id,
+        createdById: elena.id,
+      },
+      {
+        tenantId: northfield.id,
+        monitorId: sponsorMonitorMembership.id,
+        learnerId: ethan.id,
+        createdById: elena.id,
+      },
+      {
+        tenantId: northfield.id,
+        monitorId: companyMonitorMembership.id,
+        learnerId: jordan.id,
+        createdById: elena.id,
+      },
+      {
+        tenantId: northfield.id,
+        monitorId: companyMonitorMembership.id,
+        learnerId: liam.id,
+        createdById: elena.id,
+      },
+    ],
+  });
 
   // A sample promo to demonstrate the platform-admin promotions panel.
   await db.promoCode.create({
@@ -2724,6 +2819,9 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
   console.log("  School owner  owner@northfield.edu   / Password123!");
   console.log("  Teacher       teacher@northfield.edu / Password123!");
   console.log("  Moderator     moderator@northfield.edu / Password123!");
+  console.log("  Parent monitor  parent@northfield.edu / Password123!");
+  console.log("  Sponsor monitor sponsor@northfield.edu / Password123!");
+  console.log("  Company monitor company@northfield.edu / Password123!");
   console.log("  Student       student@northfield.edu / Password123!");
   console.log("  Prospective   ethan@northfield.edu   / Password123! (not enrolled; placement demo)");
   console.log("  Solo teacher  maya@studiomath.io     / Password123!");

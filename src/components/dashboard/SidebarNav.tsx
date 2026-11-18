@@ -10,6 +10,7 @@ import {
   CalendarCheck,
   ClipboardCheck,
   CreditCard,
+  Eye,
   FileBarChart,
   GraduationCap,
   LayoutDashboard,
@@ -46,6 +47,7 @@ export function SidebarNav({
   const teacher = ["OWNER", "ADMIN", "TEACHER"].includes(role);
   const moderator = ["OWNER", "ADMIN", "TEACHER", "MODERATOR"].includes(role);
   const admin = ["OWNER", "ADMIN"].includes(role);
+  const monitor = role === "MONITOR";
   const moderationItem: Item = {
     href: "/dashboard/moderation",
     label: "Moderation",
@@ -61,6 +63,11 @@ export function SidebarNav({
     label: "Messages",
     icon: Bell,
     count: unreadCount > 0 ? unreadCount : undefined,
+  };
+  const monitorItem: Item = {
+    href: "/dashboard/monitor",
+    label: "Monitor",
+    icon: Eye,
   };
 
   const groups: { label: string; items: Item[] }[] = [];
@@ -82,6 +89,7 @@ export function SidebarNav({
       label: "People & insight",
       items: [
         staffItem,
+        ...(admin ? [monitorItem] : []),
         { href: "/dashboard/students", label: "Learners", icon: Users },
         { href: "/dashboard/attendance", label: "Attendance", icon: CalendarCheck },
         { href: "/dashboard/insights", label: "Success insights", icon: BrainCircuit },
@@ -97,6 +105,18 @@ export function SidebarNav({
         notificationsItem,
         moderationItem,
         staffItem,
+      ],
+    });
+  } else if (monitor) {
+    groups.push({
+      label: "Monitoring",
+      items: [
+        {
+          href: "/dashboard/monitoring",
+          label: "My learners",
+          icon: Eye,
+          exact: true,
+        },
       ],
     });
   } else {
@@ -115,7 +135,7 @@ export function SidebarNav({
   groups.push({
     label: "Workspace",
     items: [
-      { href: "/dashboard/settings", label: "Settings", icon: Settings },
+      ...(monitor ? [] : [{ href: "/dashboard/settings", label: "Settings", icon: Settings }]),
       ...(admin
         ? [{ href: "/dashboard/billing", label: "Billing & plan", icon: CreditCard }]
         : []),
@@ -168,12 +188,14 @@ export function MobileNav({
   unreadCount = 0,
   tenantName,
   userName,
+  showPlan = true,
 }: {
   role: string;
   isSuperAdmin: boolean;
   unreadCount?: number;
   tenantName: string;
   userName: string;
+  showPlan?: boolean;
 }) {
   return (
     <details className="group relative lg:hidden">
@@ -197,11 +219,13 @@ export function MobileNav({
         >
           <SidebarNav role={role} isSuperAdmin={isSuperAdmin} unreadCount={unreadCount} />
         </div>
-        <div className="mt-3 border-t border-slate-100 pt-2">
-          <Link href="/dashboard/billing" className="sidebar-link">
-            <Wallet className="size-4" /> Plan & usage
-          </Link>
-        </div>
+        {showPlan && (
+          <div className="mt-3 border-t border-slate-100 pt-2">
+            <Link href="/dashboard/billing" className="sidebar-link">
+              <Wallet className="size-4" /> Plan & usage
+            </Link>
+          </div>
+        )}
       </div>
     </details>
   );

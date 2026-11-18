@@ -27,6 +27,10 @@ export async function GET(
   });
   if (!membership) return new NextResponse("Not found", { status: 404 });
 
+  if (membership.role === "MONITOR") {
+    return new NextResponse("Not found", { status: 404 });
+  }
+
   if (membership.role === "STUDENT") {
     const courseId = attachment.courseId ?? attachment.lesson?.courseId ?? null;
     if (courseId) {

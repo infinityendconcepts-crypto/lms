@@ -10,11 +10,12 @@ import { assertSeatAvailable, getPlanState } from "@/lib/usage";
 import { audit } from "@/lib/audit";
 import { appUrl, sendEmail } from "@/lib/email";
 import { parsePeopleCsv } from "@/lib/people-csv";
+import { isMonitorType, monitorType } from "@/lib/monitor";
 
 type TenantContext = Awaited<ReturnType<typeof requireTenant>>;
 type PersonKind = "staff" | "learner";
 
-const CREATABLE_STAFF_ROLES: Role[] = ["ADMIN", "TEACHER", "MODERATOR"];
+const CREATABLE_STAFF_ROLES: Role[] = ["ADMIN", "TEACHER", "MODERATOR", "MONITOR"];
 const MAX_IMPORT_ROWS = 200;
 const MAX_CSV_BYTES = 500_000;
 
@@ -34,9 +35,11 @@ function buildQuery(parts: Record<string, string | number | undefined | null>) {
 /** Only the two people-management pages are valid return targets. */
 function peopleRedirect(formData: FormData, parts: Record<string, string | number | undefined | null> = {}): never {
   const raw = String(formData.get("returnTo") ?? "");
-  const base = raw === "/dashboard/staff" || raw === "/dashboard/students" ? raw : "/dashboard/settings?tab=members";
+  const allowed = ["/dashboard/staff", "/dashboard/students", "/dashboard/monitor"];
+  const base = allowed.includes(raw) ? raw : "/dashboard/settings?tab=members";
   const tab = String(formData.get("tab") ?? "");
-  const query = buildQuery({ tab: ["add", "invite", "import"].includes(tab) ? tab : undefined, ...parts });
+  const validTabs = ["add", "invite", "import", "overview", "monitors", "learners", "users"];
+  const query = buildQuery({ tab: validTabs.includes(tab) ? tab : undefined, ...parts });
   redirect(query ? `${base}${base.includes("?") ? "&" : "?"}${query}` : base);
 }
 
@@ -113,6 +116,8 @@ async function addPersonRecord(input: {
   email: string;
   role: Role;
   courseId?: string | null;
+  personMonitorType?: string | null;
+  personMonitorOrganization?: string | null;
 }): Promise<AddResult> {
   const { ctx, name, email, role, courseId } = input;
 
@@ -142,7 +147,18 @@ async function addPersonRecord(input: {
   }
 
   await db.membership.create({
-    data: { tenantId: ctx.tenant.id, userId: user.id, role, status: "ACTIVE" },
+    data: {
+      tenantId: ctx.tenant.id,
+      userId: user.id,
+      role,
+      status: "ACTIVE",
+      ...(role === "MONITOR"
+        ? {
+            monitorType: monitorType(input.personMonitorType),
+            monitorOrganization: input.personMonitorOrganization || null,
+          }
+        : {}),
+    },
   });
 
   if (courseId) await enrollUser(ctx, user.id, courseId);
@@ -154,6 +170,8 @@ async function addPersonRecord(input: {
 async function revalidatePeoplePages() {
   revalidatePath("/dashboard/staff");
   revalidatePath("/dashboard/students");
+  revalidatePath("/dashboard/monitor");
+  revalidatePath("/dashboard/monitoring");
   revalidatePath("/dashboard/settings");
 }
 
@@ -195,6 +213,76 @@ export async function addStaffAction(formData: FormData) {
   });
   await revalidatePeoplePages();
   peopleRedirect(formData, { added: 1, role });
+}
+
+/** Adds a sponsor, company or parent and links the learners they may monitor. */
+export async function addMonitorAction(formData: FormData) {
+  const ctx = await requireTenant("ADMIN");
+  const parsed = personSchema.safeParse({
+    name: formData.get("name"),
+    email: formData.get("email"),
+  });
+  const rawType = String(formData.get("monitorType") ?? "");
+  const organization = String(formData.get("monitorOrganization") ?? "").trim();
+
+  if (!parsed.success) peopleRedirect(formData, { error: "Enter a name and valid email" });
+  if (!isMonitorType(rawType)) peopleRedirect(formData, { error: "Choose a valid monitor type" });
+  if (organization.length > 120) peopleRedirect(formData, { error: "Organization name is too long" });
+
+  const result = await addPersonRecord({
+    ctx,
+    ...parsed.data,
+    role: "MONITOR",
+    personMonitorType: rawType,
+    personMonitorOrganization: organization || null,
+  });
+  if (!result.ok) peopleRedirect(formData, { error: `Could not add monitor: ${result.reason}` });
+
+  const learnerIds = Array.from(
+    new Set(formData.getAll("learnerIds").map(String).filter((id) => id.length > 0))
+  ).slice(0, 200);
+  let assigned = 0;
+  if (learnerIds.length > 0) {
+    const learners = await db.membership.findMany({
+      where: { tenantId: ctx.tenant.id, role: "STUDENT", userId: { in: learnerIds } },
+      select: { userId: true },
+    });
+    const monitorMembership = await db.membership.findUnique({
+      where: { tenantId_userId: { tenantId: ctx.tenant.id, userId: result.userId } },
+      select: { id: true },
+    });
+    if (monitorMembership) {
+      for (const learner of learners) {
+        await db.monitorAssignment.upsert({
+          where: {
+            tenantId_monitorId_learnerId: {
+              tenantId: ctx.tenant.id,
+              monitorId: monitorMembership.id,
+              learnerId: learner.userId,
+            },
+          },
+          create: {
+            tenantId: ctx.tenant.id,
+            monitorId: monitorMembership.id,
+            learnerId: learner.userId,
+            createdById: ctx.user.id,
+          },
+          update: {},
+        });
+        assigned += 1;
+      }
+    }
+  }
+
+  await audit({
+    tenantId: ctx.tenant.id,
+    actorId: ctx.user.id,
+    action: "monitor.created",
+    target: parsed.data.email,
+    meta: { monitorType: rawType, organization: organization || null, assigned },
+  });
+  await revalidatePeoplePages();
+  peopleRedirect(formData, { added: 1, monitorType: rawType, assigned });
 }
 
 export async function addLearnerAction(formData: FormData) {

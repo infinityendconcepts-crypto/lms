@@ -26,32 +26,34 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
 
-  memberships        Membership[]
-  sessions           Session[]
-  resetTokens        PasswordReset[]
-  invitationsSent    Invitation[]           @relation("Inviter")
-  coursesOwned       Course[]               @relation("CourseOwner")
-  enrollments        Enrollment[]
-  attempts           Attempt[]
-  answersGraded      Answer[]               @relation("Grader")
-  auditLogs          AuditLog[]
-  notifications      Notification[]         @relation("NotificationRecipient")
-  notificationsSent  Notification[]         @relation("NotificationSender")
-  uploads            Attachment[]
-  attendanceTaken    AttendanceSession[]    @relation("AttendanceCreator")
-  attendanceMarked   AttendanceRecord[]     @relation("AttendanceMarker")
-  attendanceRecords  AttendanceRecord[]     @relation("AttendanceStudent")
-  benchmarkRuns      AiBenchmarkRun[]       @relation("BenchmarkRunner")
-  benchmarks         SuccessBenchmark[]     @relation("StudentBenchmarks")
-  studentProfiles    StudentProfile[]
-  qualifications     LearnerQualification[]
-  codePadSubmissions CodePadSubmission[]
-  codePadsAuthored   CodePad[]              @relation("CodePadAuthor")
-  expensesCreated    CourseExpense[]        @relation("ExpenseCreator")
-  eligibilityChecks  CourseEligibility[]    @relation("EligibilityStudent")
-  eligibilityRuns    CourseEligibility[]    @relation("EligibilityRunner")
-  planTasksAssigned  CoursePlanTask[]       @relation("PlanTaskAssignee")
-  planTasksCreated   CoursePlanTask[]       @relation("PlanTaskAuthor")
+  memberships               Membership[]
+  sessions                  Session[]
+  resetTokens               PasswordReset[]
+  invitationsSent           Invitation[]           @relation("Inviter")
+  coursesOwned              Course[]               @relation("CourseOwner")
+  enrollments               Enrollment[]
+  attempts                  Attempt[]
+  answersGraded             Answer[]               @relation("Grader")
+  auditLogs                 AuditLog[]
+  notifications             Notification[]         @relation("NotificationRecipient")
+  notificationsSent         Notification[]         @relation("NotificationSender")
+  uploads                   Attachment[]
+  attendanceTaken           AttendanceSession[]    @relation("AttendanceCreator")
+  attendanceMarked          AttendanceRecord[]     @relation("AttendanceMarker")
+  attendanceRecords         AttendanceRecord[]     @relation("AttendanceStudent")
+  benchmarkRuns             AiBenchmarkRun[]       @relation("BenchmarkRunner")
+  benchmarks                SuccessBenchmark[]     @relation("StudentBenchmarks")
+  studentProfiles           StudentProfile[]
+  qualifications            LearnerQualification[]
+  codePadSubmissions        CodePadSubmission[]
+  codePadsAuthored          CodePad[]              @relation("CodePadAuthor")
+  expensesCreated           CourseExpense[]        @relation("ExpenseCreator")
+  eligibilityChecks         CourseEligibility[]    @relation("EligibilityStudent")
+  eligibilityRuns           CourseEligibility[]    @relation("EligibilityRunner")
+  planTasksAssigned         CoursePlanTask[]       @relation("PlanTaskAssignee")
+  planTasksCreated          CoursePlanTask[]       @relation("PlanTaskAuthor")
+  monitorAssignments        MonitorAssignment[]    @relation("MonitoredLearners")
+  monitorAssignmentsCreated MonitorAssignment[]    @relation("MonitorAssignmentCreator")
 }
 
 model Session {
@@ -84,23 +86,23 @@ model PasswordReset {
 
 // A tenant is a school OR an individual teacher's workspace.
 model Tenant {
-  id          String    @id @default(cuid())
-  slug        String    @unique
-  name        String
-  kind        String    @default("SCHOOL") // SCHOOL | TEACHER
-  logoUrl       String?
+  id             String    @id @default(cuid())
+  slug           String    @unique
+  name           String
+  kind           String    @default("SCHOOL") // SCHOOL | TEACHER
+  logoUrl        String?
   logoStorageKey String?
   logoMimeType   String?
-  brandColor    String    @default("#4f46e5")
-  currency      String    @default("ZAR") // ZAR | USD | EUR | GBP
-  headline    String?
-  about       String?
-  website     String?
-  trialEndsAt DateTime?
-  settings    String    @default("{}")
-  createdAt     DateTime  @default(now())
-  logoUpdatedAt DateTime?
-  suspended     Boolean   @default(false)
+  brandColor     String    @default("#4f46e5")
+  currency       String    @default("ZAR") // ZAR | USD | EUR | GBP
+  headline       String?
+  about          String?
+  website        String?
+  trialEndsAt    DateTime?
+  settings       String    @default("{}")
+  createdAt      DateTime  @default(now())
+  logoUpdatedAt  DateTime?
+  suspended      Boolean   @default(false)
 
   memberships        Membership[]
   invitations        Invitation[]
@@ -125,18 +127,22 @@ model Tenant {
   eligibilityChecks  CourseEligibility[]
   planTasks          CoursePlanTask[]
   promoRedemptions   PromoRedemption[]
+  monitorAssignments MonitorAssignment[]
 }
 
 model Membership {
-  id        String   @id @default(cuid())
-  tenantId  String
-  userId    String
-  role      String   @default("STUDENT") // OWNER | ADMIN | TEACHER | MODERATOR | STUDENT
-  status    String   @default("ACTIVE") // ACTIVE | SUSPENDED
-  createdAt DateTime @default(now())
+  id                  String   @id @default(cuid())
+  tenantId            String
+  userId              String
+  role                String   @default("STUDENT") // OWNER | ADMIN | TEACHER | MODERATOR | MONITOR | STUDENT
+  status              String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  monitorType         String? // SPONSOR | COMPANY | PARENT (only for MONITOR role)
+  monitorOrganization String?
+  createdAt           DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monitorAssignments MonitorAssignment[] @relation("MonitorAssignments")
 
   @@unique([tenantId, userId])
   @@index([tenantId])
@@ -144,22 +150,44 @@ model Membership {
 }
 
 model Invitation {
-  id          String    @id @default(cuid())
-  tenantId    String
-  email       String
-  role        String    @default("STUDENT")
-  courseId    String?
-  tokenHash   String    @unique
-  invitedById String?
-  expiresAt   DateTime
-  acceptedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  id                  String    @id @default(cuid())
+  tenantId            String
+  email               String
+  role                String    @default("STUDENT")
+  courseId            String?
+  monitorType         String? // SPONSOR | COMPANY | PARENT (only for MONITOR invites)
+  monitorOrganization String?
+  tokenHash           String    @unique
+  invitedById         String?
+  expiresAt           DateTime
+  acceptedAt          DateTime?
+  createdAt           DateTime  @default(now())
 
   tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invitedBy User?   @relation("Inviter", fields: [invitedById], references: [id], onDelete: SetNull)
   course    Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, email])
+}
+
+// A MONITOR user can only see the learners explicitly assigned to them.
+model MonitorAssignment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  monitorId   String // Membership.id whose role is MONITOR
+  learnerId   String // User.id whose tenant membership role is STUDENT
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  monitor   Membership @relation("MonitorAssignments", fields: [monitorId], references: [id], onDelete: Cascade)
+  learner   User       @relation("MonitoredLearners", fields: [learnerId], references: [id], onDelete: Cascade)
+  createdBy User?      @relation("MonitorAssignmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, monitorId, learnerId])
+  @@index([tenantId])
+  @@index([monitorId])
+  @@index([learnerId])
 }
 
 // Dev-friendly email outbox. Swap the sender in src/lib/email.ts for Resend/SES.
@@ -181,17 +209,17 @@ model EmailMessage {
 // Per-user in-app notifications. Messages and announcements are fanned out to
 // one row per recipient so each person has their own read state and email copy.
 model Notification {
-  id           String    @id @default(cuid())
-  tenantId     String
-  userId       String
-  senderId     String?
-  kind         String    @default("MESSAGE") // MESSAGE | ANNOUNCEMENT | SYSTEM
-  audience     String? // ALL | STAFF | TEACHERS | LEARNERS for broadcasts
-  title        String
-  body         String
-  readAt       DateTime?
-  emailSentAt  DateTime?
-  createdAt    DateTime  @default(now())
+  id          String    @id @default(cuid())
+  tenantId    String
+  userId      String
+  senderId    String?
+  kind        String    @default("MESSAGE") // MESSAGE | ANNOUNCEMENT | SYSTEM
+  audience    String? // ALL | STAFF | TEACHERS | LEARNERS for broadcasts
+  title       String
+  body        String
+  readAt      DateTime?
+  emailSentAt DateTime?
+  createdAt   DateTime  @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
@@ -439,18 +467,18 @@ model Answer {
 
 // One register per class meeting (a course on a given date).
 model AttendanceSession {
-  id          String   @id @default(cuid())
-  tenantId    String
-  courseId    String
-  lessonId    String?
-  title               String?
-  date                DateTime
-  notes               String?
-  checkInCode         String?
+  id                   String    @id @default(cuid())
+  tenantId             String
+  courseId             String
+  lessonId             String?
+  title                String?
+  date                 DateTime
+  notes                String?
+  checkInCode          String?
   checkInCodeExpiresAt DateTime?
-  createdById         String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdById          String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   course    Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -585,7 +613,7 @@ model CourseStage {
   order       Int      @default(0)
   createdAt   DateTime @default(now())
 
-  course      Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
   lessons     Lesson[]
   assessments Assessment[]
   planTasks   CoursePlanTask[]
@@ -719,9 +747,9 @@ model StudentProfile {
   sponsorshipMonths    Int?
   sponsorshipNotes     String?
 
-  notes                String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -797,14 +825,18 @@ model Subscription {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
-/** Platform-wide key/value settings (plan definitions are stored as JSON). */
+/**
+ * Platform-wide key/value settings (plan definitions are stored as JSON).
+ */
 model PlatformSetting {
   key       String   @id
   value     String   @default("{}")
   updatedAt DateTime @updatedAt
 }
 
-/** Super-admin promotion code. Discounts are accounting-only: no card is charged. */
+/**
+ * Super-admin promotion code. Discounts are accounting-only: no card is charged.
+ */
 model PromoCode {
   id             String    @id @default(cuid())
   code           String    @unique
@@ -826,10 +858,10 @@ model PromoCode {
 }
 
 model PromoRedemption {
-  id        String   @id @default(cuid())
-  codeId    String
-  tenantId  String
-  usedAt    DateTime @default(now())
+  id       String   @id @default(cuid())
+  codeId   String
+  tenantId String
+  usedAt   DateTime @default(now())
 
   code   PromoCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
   tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)

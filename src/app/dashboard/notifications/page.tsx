@@ -34,7 +34,7 @@ export default async function NotificationsPage({
   const ctx = await requireTenant();
   const tab = sp.tab === "compose" ? "compose" : "inbox";
   const filter = sp.filter === "unread" ? "unread" : "all";
-  const staff = ctx.role !== "STUDENT";
+  const staff = atLeast(ctx.role, "MODERATOR");
 
   const [notifications, unreadCount, memberships, enrolledCourses] = await Promise.all([
     db.notification.findMany({

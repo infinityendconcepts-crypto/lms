@@ -22,6 +22,7 @@ import {
 } from "@/lib/plans";
 import { getPlan } from "@/lib/plan-catalog";
 import { normalizePromoCode, recordPromoRedemption, resolvePromo } from "@/lib/promos";
+import { isMonitorType, monitorType } from "@/lib/monitor";
 
 const COOKIE = {
   httpOnly: true,
@@ -92,10 +93,18 @@ export async function inviteMemberAction(formData: FormData) {
   const email = z.string().trim().toLowerCase().email().safeParse(formData.get("email"));
   const role = String(formData.get("role") ?? "STUDENT") as Role;
   const courseId = String(formData.get("courseId") ?? "") || null;
-  const allowed: Role[] = ["ADMIN", "TEACHER", "MODERATOR", "STUDENT"];
+  const allowed: Role[] = ["ADMIN", "TEACHER", "MODERATOR", "MONITOR", "STUDENT"];
+  const rawMonitorType = String(formData.get("monitorType") ?? "SPONSOR");
+  const monitorOrganization = String(formData.get("monitorOrganization") ?? "").trim() || null;
 
   if (!email.success) memberRedirect(formData, "error=Enter+a+valid+email");
   if (!allowed.includes(role)) memberRedirect(formData, "error=Invalid+role");
+  if (role === "MONITOR" && !isMonitorType(rawMonitorType)) {
+    memberRedirect(formData, "error=Choose+a+valid+monitor+type");
+  }
+  if (monitorOrganization && monitorOrganization.length > 120) {
+    memberRedirect(formData, "error=Organization+name+is+too+long");
+  }
 
   const existingUser = await db.user.findUnique({ where: { email: email.data } });
   if (existingUser) {
@@ -136,6 +145,12 @@ export async function inviteMemberAction(formData: FormData) {
       email: email.data,
       role,
       courseId: course?.id ?? null,
+      ...(role === "MONITOR"
+        ? {
+            monitorType: monitorType(rawMonitorType),
+            monitorOrganization,
+          }
+        : {}),
       invitedById: ctx.user.id,
       tokenHash: tokenHash(token),
       expiresAt: new Date(Date.now() + 7 * 86_400_000),
@@ -160,6 +175,8 @@ export async function inviteMemberAction(formData: FormData) {
 
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/staff");
+  revalidatePath("/dashboard/monitor");
+  revalidatePath("/dashboard/monitoring");
   memberRedirect(formData, `invited=${encodeURIComponent(email.data)}`);
 }
 
@@ -170,6 +187,8 @@ export async function revokeInviteAction(formData: FormData) {
   await audit({ tenantId: ctx.tenant.id, actorId: ctx.user.id, action: "invitation.revoked" });
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/staff");
+  revalidatePath("/dashboard/monitor");
+  revalidatePath("/dashboard/monitoring");
   memberRedirect(formData);
 }
 
@@ -177,7 +196,7 @@ export async function changeRoleAction(formData: FormData) {
   const ctx = await requireTenant("ADMIN");
   const membershipId = String(formData.get("membershipId") ?? "");
   const role = String(formData.get("role") ?? "") as Role;
-  if (!["ADMIN", "TEACHER", "MODERATOR", "STUDENT"].includes(role)) return;
+  if (!["ADMIN", "TEACHER", "MODERATOR", "MONITOR", "STUDENT"].includes(role)) return;
 
   const target = await db.membership.findFirst({
     where: { id: membershipId, tenantId: ctx.tenant.id },
@@ -187,16 +206,39 @@ export async function changeRoleAction(formData: FormData) {
   if (target.userId === ctx.user.id) return;
   if (role === "ADMIN" && !atLeast(ctx.role, "OWNER") && target.role === "ADMIN") return;
 
-  await db.membership.update({ where: { id: target.id }, data: { role } });
+  if (role === "MONITOR") {
+    await db.membership.update({
+      where: { id: target.id },
+      data: {
+        role,
+        monitorType: monitorType(String(formData.get("monitorType") ?? "")),
+        monitorOrganization: String(formData.get("monitorOrganization") ?? "").trim() || null,
+      },
+    });
+  } else {
+    // Monitor assignments and metadata are meaningless once the role changes.
+    await db.$transaction([
+      db.monitorAssignment.deleteMany({
+        where: { tenantId: ctx.tenant.id, monitorId: target.id },
+      }),
+      db.membership.update({
+        where: { id: target.id },
+        data: { role, monitorType: null, monitorOrganization: null },
+      }),
+    ]);
+  }
+
   await audit({
     tenantId: ctx.tenant.id,
     actorId: ctx.user.id,
     action: "member.role_changed",
     target: target.userId,
-    meta: { role },
+    meta: { from: target.role, role },
   });
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/staff");
+  revalidatePath("/dashboard/monitor");
+  revalidatePath("/dashboard/monitoring");
   memberRedirect(formData, "saved=1");
 }
 
@@ -227,6 +269,8 @@ export async function removeMemberAction(formData: FormData) {
   });
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/staff");
+  revalidatePath("/dashboard/monitor");
+  revalidatePath("/dashboard/monitoring");
   memberRedirect(formData, "removed=1");
 }
 
@@ -287,12 +331,31 @@ export async function acceptInviteAction(
     if (!atLeast(existingMembership.role, invitation.role as Role)) {
       await db.membership.update({
         where: { id: existingMembership.id },
-        data: { role: invitation.role },
+        data: {
+          role: invitation.role,
+          ...(invitation.role === "MONITOR"
+            ? {
+                monitorType: monitorType(invitation.monitorType),
+                monitorOrganization: invitation.monitorOrganization,
+              }
+            : {}),
+        },
       });
     }
   } else {
     await db.membership.create({
-      data: { tenantId: invitation.tenantId, userId, role: invitation.role, status: "ACTIVE" },
+      data: {
+        tenantId: invitation.tenantId,
+        userId,
+        role: invitation.role,
+        status: "ACTIVE",
+        ...(invitation.role === "MONITOR"
+          ? {
+              monitorType: monitorType(invitation.monitorType),
+              monitorOrganization: invitation.monitorOrganization,
+            }
+          : {}),
+      },
     });
   }
 
@@ -322,7 +385,7 @@ export async function acceptInviteAction(
   const jar = await cookies();
   jar.set(TENANT_COOKIE, invitation.tenantId, COOKIE);
   revalidatePath("/dashboard", "layout");
-  redirect("/dashboard?joined=1");
+  redirect(invitation.role === "MONITOR" ? "/dashboard/monitoring?joined=1" : "/dashboard?joined=1");
 }
 
 export async function createWorkspaceAction(formData: FormData) {

@@ -42,7 +42,7 @@ async function broadcastRecipientIds(
         case "ALL":
           return true;
         case "STAFF":
-          return membership.role !== "STUDENT";
+          return atLeast(membership.role, "MODERATOR");
         case "TEACHERS":
           return atLeast(membership.role, "TEACHER");
         case "LEARNERS":
@@ -84,7 +84,7 @@ export async function sendMessageAction(formData: FormData) {
   const body = text(formData, "body");
   const rawAudience = text(formData, "audience");
   const audience = isMessageAudience(rawAudience) ? rawAudience : null;
-  const staff = ctx.role !== "STUDENT";
+  const staff = atLeast(ctx.role, "MODERATOR");
 
   if (title.length < 3 || title.length > 120) {
     redirect(`/dashboard/notifications?tab=compose&error=${encodeURIComponent("Use a subject between 3 and 120 characters")}`);
