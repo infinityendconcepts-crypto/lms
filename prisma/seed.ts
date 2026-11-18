@@ -1,5 +1,5 @@
 /**
- * Axiom LMS demo seed.
+ * Nkanyezi LMS demo seed.
  *
  * Run with: npm run db:seed
  * Resets the local SQLite database and recreates two tenants, users,
@@ -125,8 +125,8 @@ async function main() {
   console.log("Creating users and workspaces…");
   const admin = await db.user.create({
     data: {
-      email: "admin@axiom.dev",
-      name: "Axiom Admin",
+      email: "admin@nkanyezi.dev",
+      name: "Nkanyezi Admin",
       passwordHash,
       isSuperAdmin: true,
       timezone: "America/New_York",
@@ -2437,7 +2437,7 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
         tenantId: input.tenantId,
         courseId: input.courseId,
         provider: "local",
-        model: "axiom-local-v1",
+        model: "nkanyezi-local-v1",
         source: "HEURISTIC",
         status: "SUCCESS",
         studentCount: features.length,
@@ -2469,7 +2469,7 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
           features: JSON.stringify(student),
           source: "HEURISTIC",
           provider: "local",
-          model: "axiom-local-v1",
+          model: "nkanyezi-local-v1",
           createdAt,
         };
       }),
@@ -2530,7 +2530,7 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
       {
         tenantId: northfield.id,
         to: "newteacher@northfield.edu",
-        subject: "You are invited to Northfield Academy on Axiom",
+        subject: "You are invited to Northfield Academy on Nkanyezi",
         body: "Dr. Elena Rivera invited you to join Northfield Academy as a teacher.",
         kind: "INVITE",
         sentAt: days(-2),
@@ -2546,7 +2546,7 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
       {
         tenantId: studio.id,
         to: "maya@studiomath.io",
-        subject: "Welcome to Axiom",
+        subject: "Welcome to Nkanyezi",
         body: "Your Studio Math workspace is ready. Your 14-day Growth trial has started.",
         kind: "WELCOME",
         sentAt: days(-3),
@@ -2575,7 +2575,7 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
   });
 
   console.log("\nDemo data ready.\n");
-  console.log("  Super admin   admin@axiom.dev        / Password123!");
+  console.log("  Super admin   admin@nkanyezi.dev        / Password123!");
   console.log("  School owner  owner@northfield.edu   / Password123!");
   console.log("  Teacher       teacher@northfield.edu / Password123!");
   console.log("  Student       student@northfield.edu / Password123!");

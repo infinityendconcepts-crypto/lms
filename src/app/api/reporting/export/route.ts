@@ -85,7 +85,7 @@ export async function GET(request: Request) {
   return new Response(toCsv(rows), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="axiom-report-${type}-${new Date()
+      "Content-Disposition": `attachment; filename="nkanyezi-report-${type}-${new Date()
         .toISOString()
         .slice(0, 10)}.csv"`,
     },

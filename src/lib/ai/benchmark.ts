@@ -145,7 +145,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 function systemPrompt() {
   return [
-    "You are Axiom's student success analyst.",
+    "You are Nkanyezi's student success analyst.",
     "Estimate how likely each learner is to stay on track and pass their courses.",
     "Use ONLY the supplied data. Do not invent facts and do not infer protected traits, diagnoses or family circumstances.",
     "Weigh attendance (present, late, absent, excused), task grades, submission completeness, overdue work, lesson progress, engagement recency and grade trend.",
@@ -296,7 +296,7 @@ export async function runBenchmark(input: {
 
   const latencyMs = Date.now() - startedAt;
   const provider = runtime ? runtime.id : "local";
-  const model = runtime ? runtime.model : "axiom-local-v1";
+  const model = runtime ? runtime.model : "nkanyezi-local-v1";
 
   const run = await db.aiBenchmarkRun.create({
     data: {
@@ -334,7 +334,7 @@ export async function runBenchmark(input: {
       features: JSON.stringify(student),
       source: prediction.source,
       provider: prediction.source === "AI" ? provider : "local",
-      model: prediction.source === "AI" ? model : "axiom-local-v1",
+      model: prediction.source === "AI" ? model : "nkanyezi-local-v1",
     };
   });
 

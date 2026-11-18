@@ -39,7 +39,6 @@ export async function updateWorkspaceAction(formData: FormData) {
   const headline = String(formData.get("headline") ?? "").trim();
   const about = String(formData.get("about") ?? "").trim();
   const website = String(formData.get("website") ?? "").trim();
-  const logoUrl = String(formData.get("logoUrl") ?? "").trim();
   const rawColor = String(formData.get("brandColor") ?? "#4f46e5");
   const brandColor = /^#[0-9a-fA-F]{6}$/.test(rawColor) ? rawColor : "#4f46e5";
 
@@ -52,7 +51,6 @@ export async function updateWorkspaceAction(formData: FormData) {
       headline: headline || null,
       about: about || null,
       website: website || null,
-      logoUrl: logoUrl || null,
       brandColor,
     },
   });
@@ -122,7 +120,7 @@ export async function inviteMemberAction(formData: FormData) {
     tenantId: ctx.tenant.id,
     kind: "INVITATION",
     subject: `${ctx.user.name} invited you to ${ctx.tenant.name}`,
-    body: `You've been invited to join ${ctx.tenant.name} on Axiom as ${role.toLowerCase()}.\n\nAccept your invitation:\n${link}\n\nThis link expires in 7 days.`,
+    body: `You've been invited to join ${ctx.tenant.name} on Nkanyezi as ${role.toLowerCase()}.\n\nAccept your invitation:\n${link}\n\nThis link expires in 7 days.`,
   });
   await audit({
     tenantId: ctx.tenant.id,
@@ -228,7 +226,7 @@ export async function acceptInviteAction(
   } else {
     const existing = await db.user.findUnique({ where: { email: invitation.email } });
     if (existing) {
-      return { error: "You already have an Axiom account. Sign in, then reopen this invite link." };
+      return { error: "You already have an Nkanyezi account. Sign in, then reopen this invite link." };
     }
     if (name.length < 2) return { error: "Enter your full name." };
     if (password.length < 8) return { error: "Choose a password of at least 8 characters." };

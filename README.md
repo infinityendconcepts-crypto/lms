@@ -1,6 +1,6 @@
-# Axiom LMS
+# Nkanyezi LMS
 
-A math-native, multi-tenant learning platform for schools and independent teachers. Axiom
+A math-native, multi-tenant learning platform for schools and independent teachers. Nkanyezi
 combines LaTeX lessons, math-aware assessment and grading, attendance, a gradebook, billing, and
 an explainable AI success benchmark.
 
@@ -24,7 +24,7 @@ page and landing page sign in as the first four roles below; the platform admin 
 
 | Role | Email |
 | --- | --- |
-| Platform admin | `admin@axiom.dev` |
+| Platform admin | `admin@nkanyezi.dev` |
 | School owner | `owner@northfield.edu` |
 | Teacher | `teacher@northfield.edu` |
 | Student | `student@northfield.edu` |
@@ -33,10 +33,17 @@ page and landing page sign in as the first four roles below; the platform admin 
 
 Demo invite links: `/join/northfield-demo-invite` and `/join/studio-demo-invite`.
 
+### Workspace logos
+
+Workspace admins can upload a logo under **Settings → Workspace**, and platform admins can do the
+same from each workspace's **Workspace & subscription details** panel. PNG, JPG, WEBP, GIF, AVIF
+and SVG images up to 5 MB are supported. Logos appear in the dashboard, invitation pages and the
+workspace switcher, and can be removed at any time.
+
 ## What is included
 
 - **Multi-tenant workspaces** — schools and solo teachers, tenant switching, roles
-  (owner / admin / teacher / student), invitations and seat limits.
+  (owner / admin / teacher / student), invitations, seat limits and per-workspace logos.
 - **Courses & lessons** — Markdown lessons with LaTeX, attachments, publishing, learner progress.
 - **Assessments** — multiple choice, multi-select, numeric, true/false, short text, long answer,
   matching and multi-part case questions; auto-grading plus a manual grading queue. Quizzes are
@@ -118,7 +125,7 @@ Admins can add providers in **Settings → AI models**. Keys are encrypted with 
 You can also configure providers entirely through environment variables; see `.env.example`.
 Providers set in `.env` appear automatically in the benchmark model menu.
 
-If a hosted model fails, Axiom records the error and falls back to the local model, so a run
+If a hosted model fails, Nkanyezi records the error and falls back to the local model, so a run
 always completes. Health checks and last-error details are shown on the AI models tab.
 
 ### Privacy

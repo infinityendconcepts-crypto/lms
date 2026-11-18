@@ -361,7 +361,7 @@ export function scoreLocally(ctx: Awaited<ReturnType<typeof loadContext>>): Elig
 
 function systemPrompt() {
   return [
-    "You are Axiom's course admissions analyst.",
+    "You are Nkanyezi's course admissions analyst.",
     "Decide whether a learner qualifies for a specific course using ONLY the supplied evidence.",
     "Use the deterministic local assessment as the baseline. Refine it only when the evidence clearly justifies it, and stay within about 15 points of the local score.",
     "Weigh placement pre-assessment results, graded course work, attendance, prior qualifications and profile completeness.",

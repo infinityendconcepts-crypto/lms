@@ -113,7 +113,7 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
       </form>
 
       <p className="mt-4 text-center text-sm text-slate-500">
-        New to Axiom?{" "}
+        New to Nkanyezi?{" "}
         <Link href="/signup" className="font-semibold text-brand-600 hover:underline">
           Create a workspace
         </Link>
@@ -124,7 +124,7 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
 
 export function DemoLogins({ demoAction }: { demoAction: (formData: FormData) => Promise<void> }) {
   const accounts = [
-    { role: "admin", label: "Platform admin", email: "admin@axiom.dev" },
+    { role: "admin", label: "Platform admin", email: "admin@nkanyezi.dev" },
     { role: "owner", label: "School owner", email: "owner@northfield.edu" },
     { role: "teacher", label: "Math teacher", email: "teacher@northfield.edu" },
     { role: "student", label: "Student", email: "student@northfield.edu" },
@@ -261,7 +261,7 @@ export function SignupForm() {
           Create my workspace <ArrowRight className="size-4" />
         </SubmitButton>
         <p className="text-center text-[11px] leading-5 text-slate-400">
-          By continuing you agree to the Axiom terms of service and privacy policy.
+          By continuing you agree to the Nkanyezi terms of service and privacy policy.
         </p>
       </form>
       <p className="mt-4 text-center text-sm text-slate-500">

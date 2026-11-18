@@ -5,6 +5,7 @@ import { tokenHash } from "@/lib/password";
 import { logoutAction } from "@/lib/actions/auth";
 import { AcceptInviteForm } from "@/components/auth/AuthForms";
 import { Logo } from "@/components/Logo";
+import { WorkspaceLogo } from "@/components/WorkspaceLogo";
 import { ROLE_LABELS, type Role } from "@/lib/tenant";
 
 export const metadata = { title: "Join workspace" };
@@ -52,12 +53,16 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
   return (
     <div>
       <div className="mb-6 flex items-center gap-3">
-        <span
-          className="flex size-11 items-center justify-center rounded-2xl text-base font-bold text-white"
-          style={{ background: invitation.tenant.brandColor }}
-        >
-          {invitation.tenant.name.slice(0, 2).toUpperCase()}
-        </span>
+        <WorkspaceLogo
+          tenant={{
+            id: invitation.tenant.id,
+            name: invitation.tenant.name,
+            logoUrl: invitation.tenant.logoUrl,
+            brandColor: invitation.tenant.brandColor,
+            updatedAt: invitation.tenant.logoUpdatedAt?.toISOString() ?? null,
+          }}
+          size="lg"
+        />
         <div>
           <p className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
             Invitation to
@@ -101,8 +106,8 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
       )}
 
       <p className="mt-6 text-center text-[11px] text-slate-400">
-        Secured by <span className="font-semibold text-slate-600">Axiom</span> · one workspace, one
-        identity
+        Secured by <span className="font-semibold text-slate-600">Nkanyezi LMS</span> · one
+        workspace, one identity
       </p>
       <div className="mt-4 flex justify-center opacity-60">
         <Logo size="sm" />

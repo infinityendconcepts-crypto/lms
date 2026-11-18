@@ -404,7 +404,7 @@ export default function LandingPage() {
               Rent the platform. Keep your identity.
             </h2>
             <p className="mt-3 max-w-xl text-[15px] leading-7 text-slate-300">
-              Axiom is built to be white-labelled. Each tenant has its own slug, logo, brand colour,
+              Nkanyezi is built to be white-labelled. Each tenant has its own slug, logo, brand colour,
               members and subscription. Roles and permissions are enforced on every query.
             </p>
             <div className="mt-7 grid gap-4 sm:grid-cols-2">
@@ -432,7 +432,7 @@ export default function LandingPage() {
                   </span>
                   <div>
                     <p className="text-xs font-bold">Studio Math</p>
-                    <p className="text-[10px] text-slate-400">studiomath.axiom.app</p>
+                    <p className="text-[10px] text-slate-400">studiomath.nkanyezi.app</p>
                   </div>
                 </div>
                 <span className="badge bg-emerald-50 text-emerald-700">Growth</span>
@@ -612,7 +612,7 @@ export default function LandingPage() {
               </p>
               <div className="mt-5 rounded-xl bg-slate-50 p-4 font-mono text-[11px] leading-6 text-slate-600">
                 <p>
-                  admin@axiom.dev <span className="text-slate-400">· platform admin</span>
+                  admin@nkanyezi.dev <span className="text-slate-400">· platform admin</span>
                 </p>
                 <p>
                   owner@northfield.edu <span className="text-slate-400">· school owner</span>
@@ -712,7 +712,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div className="border-t border-slate-100 py-4 text-center text-[10px] text-slate-400">
-          © {new Date().getFullYear()} Axiom LMS · Built with Next.js, Prisma and KaTeX
+          © {new Date().getFullYear()} Nkanyezi LMS · Built with Next.js, Prisma and KaTeX
         </div>
       </footer>
     </div>

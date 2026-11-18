@@ -4,13 +4,21 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { switchTenantAction } from "@/lib/actions/tenant";
+import { WorkspaceLogo, type LogoTenant } from "@/components/WorkspaceLogo";
 
 export function TenantSwitcher({
   memberships,
   activeId,
+  activeTenant,
 }: {
-  memberships: { tenantId: string; name: string; role: string; kind: string }[];
+  memberships: {
+    tenantId: string;
+    name: string;
+    role: string;
+    kind: string;
+  }[];
   activeId: string;
+  activeTenant: LogoTenant & { id: string };
 }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -19,6 +27,7 @@ export function TenantSwitcher({
 
   return (
     <div className="flex items-center gap-1.5">
+      <WorkspaceLogo tenant={activeTenant} size="sm" />
       {pending && <Loader2 className="size-3.5 animate-spin text-slate-400" />}
       <select
         aria-label="Switch workspace"
@@ -34,7 +43,7 @@ export function TenantSwitcher({
       >
         {memberships.map((m) => (
           <option key={m.tenantId} value={m.tenantId}>
-            {m.name} · {m.role.toLowerCase()}
+            {m.name}
           </option>
         ))}
       </select>

@@ -141,7 +141,7 @@ export default async function InsightsPage({
         <div className="mb-5 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
           <span>
-            <b>{providerLabel(latestRun.provider)}</b> could not complete this run, so Axiom fell
+            <b>{providerLabel(latestRun.provider)}</b> could not complete this run, so Nkanyezi fell
             back to the private local model. {latestRun.error}
           </span>
         </div>
@@ -238,7 +238,7 @@ export default async function InsightsPage({
                   hint={
                     latestRun.source === "AI"
                       ? `Hosted model · ${latestRun.model}`
-                      : "Local model · axiom-local-v1"
+                      : "Local model · nkanyezi-local-v1"
                   }
                   icon={<Clock className="size-4" />}
                 />

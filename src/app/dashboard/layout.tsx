@@ -4,6 +4,7 @@ import { getAppContext } from "@/lib/tenant";
 import { logoutAction } from "@/lib/actions/auth";
 import { TenantSwitcher } from "@/components/TenantSwitcher";
 import { Logo } from "@/components/Logo";
+import { WorkspaceLogo } from "@/components/WorkspaceLogo";
 import { Avatar } from "@/components/ui";
 import { MobileNav, SidebarNav } from "@/components/dashboard/SidebarNav";
 import { planFor, trialDaysLeft } from "@/lib/plans";
@@ -25,27 +26,25 @@ export default async function DashboardLayout({
     name: m.tenant.name,
     role: m.role,
     kind: m.tenant.kind,
+    logoUrl: m.tenant.logoUrl,
+    brandColor: m.tenant.brandColor,
+    updatedAt: m.tenant.logoUpdatedAt?.toISOString() ?? null,
   }));
 
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col border-r border-slate-200/80 bg-slate-50/80 px-4 py-5 backdrop-blur-xl lg:flex">
         <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
-          {ctx.tenant.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={ctx.tenant.logoUrl}
-              alt={ctx.tenant.name}
-              className="size-9 rounded-xl border border-slate-200 object-cover"
-            />
-          ) : (
-            <span
-              className="flex size-9 items-center justify-center rounded-xl text-xs font-bold text-white shadow-sm"
-              style={{ background: ctx.tenant.brandColor }}
-            >
-              {ctx.tenant.name.slice(0, 2).toUpperCase()}
-            </span>
-          )}
+          <WorkspaceLogo
+            tenant={{
+              id: ctx.tenant.id,
+              name: ctx.tenant.name,
+              logoUrl: ctx.tenant.logoUrl,
+              brandColor: ctx.tenant.brandColor,
+              updatedAt: ctx.tenant.logoUpdatedAt?.toISOString() ?? null,
+            }}
+            className="border border-slate-200"
+          />
           <span className="min-w-0">
             <span className="block truncate text-[13px] font-bold text-slate-900">
               {ctx.tenant.name}
@@ -116,7 +115,16 @@ export default async function DashboardLayout({
               userName={ctx.user.name}
             />
             <Link href="/dashboard" className="lg:hidden">
-              <Logo size="sm" />
+              <Logo
+                size="sm"
+                tenant={{
+                  id: ctx.tenant.id,
+                  name: ctx.tenant.name,
+                  logoUrl: ctx.tenant.logoUrl,
+                  brandColor: ctx.tenant.brandColor,
+                  updatedAt: ctx.tenant.logoUpdatedAt?.toISOString() ?? null,
+                }}
+              />
             </Link>
             <div className="hidden items-center gap-2 text-xs text-slate-400 sm:flex">
               <span className="font-medium text-slate-600">{ctx.tenant.name}</span>
@@ -125,7 +133,17 @@ export default async function DashboardLayout({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <TenantSwitcher memberships={memberships} activeId={ctx.tenant.id} />
+            <TenantSwitcher
+              memberships={memberships}
+              activeId={ctx.tenant.id}
+              activeTenant={{
+                id: ctx.tenant.id,
+                name: ctx.tenant.name,
+                logoUrl: ctx.tenant.logoUrl,
+                brandColor: ctx.tenant.brandColor,
+                updatedAt: ctx.tenant.logoUpdatedAt?.toISOString() ?? null,
+              }}
+            />
             <Link
               href="/"
               className="hidden rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 sm:block"

@@ -37,7 +37,8 @@ import { listEnvProviders } from "@/lib/ai/providers";
 import { AiProviderForm } from "@/components/ai/AiProviderForm";
 import { Avatar, Badge, EmptyState, PageHeader, Tabs } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { UploadField } from "@/components/UploadField";
+import { WorkspaceLogo } from "@/components/WorkspaceLogo";
+import { WorkspaceLogoUpload } from "@/components/WorkspaceLogoUpload";
 import { getPlanState } from "@/lib/usage";
 import { formatDate, timeAgo } from "@/lib/utils";
 
@@ -275,20 +276,9 @@ export default async function SettingsPage({
                 <span className="font-mono text-xs text-slate-500">{ctx.tenant.brandColor}</span>
               </div>
             </div>
-            <div className="sm:col-span-2">
-              <UploadField
-                name="logoUrl"
-                label="Logo"
-                accept="image/*"
-                defaultUrl={ctx.tenant.logoUrl ?? ""}
-                hint="Square PNG or SVG works best · 25 MB max"
-              />
-            </div>
             <div className="sm:col-span-2 flex items-center justify-between border-t border-slate-100 pt-4">
               <p className="text-[10px] text-slate-400">
-                {planState.plan.customBranding
-                  ? "Custom branding included in your plan."
-                  : "Upgrade to Growth to unlock custom branding."}
+                Upload a logo in the branding panel — it applies across the workspace immediately.
               </p>
               <SubmitButton pendingText="Saving…">Save workspace</SubmitButton>
             </div>
@@ -304,21 +294,16 @@ export default async function SettingsPage({
               />
               <div className="relative">
                 <div className="flex items-center gap-2.5">
-                  {ctx.tenant.logoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={ctx.tenant.logoUrl}
-                      alt=""
-                      className="size-10 rounded-xl border border-white/20 object-cover"
-                    />
-                  ) : (
-                    <span
-                      className="flex size-10 items-center justify-center rounded-xl text-xs font-bold"
-                      style={{ background: ctx.tenant.brandColor }}
-                    >
-                      {ctx.tenant.name.slice(0, 2).toUpperCase()}
-                    </span>
-                  )}
+                  <WorkspaceLogo
+                    tenant={{
+                      id: ctx.tenant.id,
+                      name: ctx.tenant.name,
+                      logoUrl: ctx.tenant.logoUrl,
+                      brandColor: ctx.tenant.brandColor,
+                      updatedAt: ctx.tenant.logoUpdatedAt?.toISOString() ?? null,
+                    }}
+                    className="border border-white/20"
+                  />
                   <div>
                     <p className="text-sm font-bold">{ctx.tenant.name}</p>
                     <p className="text-[10px] text-slate-300">
@@ -331,6 +316,19 @@ export default async function SettingsPage({
                 </p>
               </div>
             </div>
+
+            {admin && (
+              <WorkspaceLogoUpload
+                key={`logo-${ctx.tenant.id}-${ctx.tenant.logoUrl ?? "none"}-${ctx.tenant.logoUpdatedAt?.toISOString() ?? "v0"}`}
+                tenant={{
+                  id: ctx.tenant.id,
+                  name: ctx.tenant.name,
+                  logoUrl: ctx.tenant.logoUrl,
+                  brandColor: ctx.tenant.brandColor,
+                  updatedAt: ctx.tenant.logoUpdatedAt?.toISOString() ?? null,
+                }}
+              />
+            )}
 
             <div className="card p-5">
               <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">

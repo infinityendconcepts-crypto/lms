@@ -1,4 +1,4 @@
-// Axiom LMS — multi-tenant schema
+// Nkanyezi LMS — multi-tenant schema
 // SQLite is used for zero-config local development. For production,
 // switch the provider to "postgresql" (all IDs/enums are string-based).
 
@@ -86,15 +86,18 @@ model Tenant {
   slug        String    @unique
   name        String
   kind        String    @default("SCHOOL") // SCHOOL | TEACHER
-  logoUrl     String?
-  brandColor  String    @default("#4f46e5")
+  logoUrl       String?
+  logoStorageKey String?
+  logoMimeType   String?
+  brandColor    String    @default("#4f46e5")
   headline    String?
   about       String?
   website     String?
   trialEndsAt DateTime?
   settings    String    @default("{}")
-  createdAt   DateTime  @default(now())
-  suspended   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  logoUpdatedAt DateTime?
+  suspended     Boolean   @default(false)
 
   memberships        Membership[]
   invitations        Invitation[]
@@ -524,7 +527,7 @@ model SuccessBenchmark {
   features           String   @default("{}")
   source             String   @default("HEURISTIC")
   provider           String   @default("local")
-  model              String   @default("axiom-local-v1")
+  model              String   @default("nkanyezi-local-v1")
   createdAt          DateTime @default(now())
 
   tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)

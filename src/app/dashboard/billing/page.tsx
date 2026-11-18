@@ -41,7 +41,7 @@ export default async function BillingPage({
       <PageHeader
         eyebrow="Commercial"
         title="Billing & plan"
-        subtitle="Rent Axiom by the seat. Upgrade, downgrade or cancel at any time — changes apply immediately in this demo."
+        subtitle="Rent Nkanyezi LMS by the seat. Upgrade, downgrade or cancel at any time — changes apply immediately in this demo."
         actions={
           <Link href="/dashboard/settings" className="btn-secondary btn-sm">
             Workspace settings

@@ -61,7 +61,7 @@ export async function GET() {
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="axiom-gradebook-${new Date()
+      "Content-Disposition": `attachment; filename="nkanyezi-gradebook-${new Date()
         .toISOString()
         .slice(0, 10)}.csv"`,
     },

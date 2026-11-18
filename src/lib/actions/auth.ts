@@ -137,7 +137,7 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
     to: email,
     tenantId,
     kind: "WELCOME",
-    subject: "Welcome to Axiom",
+    subject: "Welcome to Nkanyezi",
     body: `Hi ${name}, your workspace "${workspace}" is ready. Start by creating your first course.`,
   });
 
@@ -147,7 +147,7 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
 export async function demoLoginAction(formData: FormData) {
   const role = String(formData.get("role") ?? "teacher");
   const map: Record<string, string> = {
-    admin: "admin@axiom.dev",
+    admin: "admin@nkanyezi.dev",
     teacher: "teacher@northfield.edu",
     student: "student@northfield.edu",
     owner: "owner@northfield.edu",
@@ -203,7 +203,7 @@ export async function requestResetAction(
   await sendEmail({
     to: user.email,
     kind: "PASSWORD_RESET",
-    subject: "Reset your Axiom password",
+    subject: "Reset your Nkanyezi password",
     body: `Open this link within one hour to choose a new password:\n\n${link}`,
   });
   await audit({ actorId: user.id, action: "auth.reset_requested" });

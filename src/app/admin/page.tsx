@@ -29,6 +29,8 @@ import {
 } from "@/lib/actions/admin";
 import { Avatar, Badge, Stat, StatusBadge } from "@/components/ui";
 import { Logo } from "@/components/Logo";
+import { WorkspaceLogo } from "@/components/WorkspaceLogo";
+import { WorkspaceLogoUpload } from "@/components/WorkspaceLogoUpload";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PLAN_LIST, planFor, trialDaysLeft } from "@/lib/plans";
 import { formatDate, timeAgo } from "@/lib/utils";
@@ -102,7 +104,7 @@ export default async function AdminPage({
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900 text-white">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <Logo size="sm" />
+            <Logo size="sm" inverted />
             <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/70">
               Platform admin
             </span>
@@ -124,7 +126,7 @@ export default async function AdminPage({
             Control plane
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Every workspace on Axiom
+            Every workspace on Nkanyezi LMS
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
             Tenants, subscriptions, people and platform activity. Changes are written to the audit log.
@@ -311,9 +313,16 @@ export default async function AdminPage({
                 >
                   <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 text-sm font-bold text-white">
-                        {tenant.name.slice(0, 1)}
-                      </span>
+                      <WorkspaceLogo
+                        tenant={{
+                          id: tenant.id,
+                          name: tenant.name,
+                          logoUrl: tenant.logoUrl,
+                          brandColor: tenant.brandColor,
+                          updatedAt: tenant.logoUpdatedAt?.toISOString() ?? null,
+                        }}
+                        size="md"
+                      />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="truncate text-sm font-bold text-slate-900">{tenant.name}</p>
@@ -475,6 +484,17 @@ export default async function AdminPage({
                             className="input"
                           />
                         </div>
+                        <WorkspaceLogoUpload
+                          key={`logo-${tenant.id}-${tenant.logoUrl ?? "none"}-${tenant.logoUpdatedAt?.toISOString() ?? "v0"}`}
+                          compact
+                          tenant={{
+                            id: tenant.id,
+                            name: tenant.name,
+                            logoUrl: tenant.logoUrl,
+                            brandColor: tenant.brandColor,
+                            updatedAt: tenant.logoUpdatedAt?.toISOString() ?? null,
+                          }}
+                        />
                         <SubmitButton variant="secondary" className="btn-sm" pendingText="Saving…">
                           Save workspace
                         </SubmitButton>

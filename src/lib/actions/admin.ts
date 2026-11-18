@@ -79,7 +79,7 @@ export async function createAdminWorkspaceAction(formData: FormData) {
       headline:
         kind === "TEACHER"
           ? "Independent teaching workspace."
-          : "A focused learning workspace on Axiom.",
+          : "A focused learning workspace on Nkanyezi LMS.",
       trialEndsAt,
       subscription: {
         create: {

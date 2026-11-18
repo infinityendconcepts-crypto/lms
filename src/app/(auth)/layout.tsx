@@ -23,7 +23,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
         />
         <div className="relative">
           <Link href="/" className="inline-flex items-center gap-2.5">
-            <Logo />
+            <Logo inverted />
           </Link>
         </div>
 
@@ -36,7 +36,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
             One platform. Every school, teacher and learner its own universe.
           </h2>
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            Axiom gives each workspace isolated data, its own branding, roles and billing — while
+            Nkanyezi gives each workspace isolated data, its own branding, roles and billing — while
             learners get LaTeX math, rich case studies and instant feedback.
           </p>
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">

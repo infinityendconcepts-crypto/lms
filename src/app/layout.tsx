@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Axiom — the math-native LMS you can rent",
-    template: "%s · Axiom",
+    default: "Nkanyezi LMS — the math-native LMS you can rent",
+    template: "%s · Nkanyezi LMS",
   },
   description:
     "A multi-tenant learning platform for schools, tutoring groups and independent teachers. LaTeX math everywhere, nine modern question types, auto-grading and secure course documents.",

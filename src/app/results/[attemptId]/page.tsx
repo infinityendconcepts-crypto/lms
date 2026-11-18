@@ -68,10 +68,16 @@ export default async function AttemptResultsPage({
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <Logo size="sm" />
-            <span className="hidden text-xs font-semibold text-slate-400 sm:block">
-              {ctx.tenant.name}
-            </span>
+            <Logo
+              size="sm"
+              tenant={{
+                id: ctx.tenant.id,
+                name: ctx.tenant.name,
+                logoUrl: ctx.tenant.logoUrl,
+                brandColor: ctx.tenant.brandColor,
+                updatedAt: ctx.tenant.logoUpdatedAt?.toISOString() ?? null,
+              }}
+            />
           </Link>
           <div className="flex items-center gap-2">
             <Link
