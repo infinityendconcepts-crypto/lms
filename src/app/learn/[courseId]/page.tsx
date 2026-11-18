@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
+  CalendarCheck,
   CheckCircle2,
   ClipboardCheck,
   Clock,
@@ -105,6 +106,11 @@ export default async function LearnCoursePage({
             {teacher && (
               <Link href={`/dashboard/courses/${course.id}`} className="btn-secondary btn-sm">
                 <GraduationCap className="size-3.5" /> Manage course
+              </Link>
+            )}
+            {!teacher && (
+              <Link href="/learn/check-in" className="btn-secondary btn-sm">
+                <CalendarCheck className="size-3.5" /> Attendance
               </Link>
             )}
             <Link href="/dashboard" className="btn-ghost btn-sm">

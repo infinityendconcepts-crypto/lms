@@ -5,7 +5,14 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
-import { dayBounds, isAttendanceStatus, registerDate } from "@/lib/attendance";
+import {
+  ATTENDANCE_CODE_MINUTES,
+  dayBounds,
+  isAttendanceStatus,
+  normalizeAttendanceCode,
+  registerDate,
+} from "@/lib/attendance";
+import { newAttendanceCode } from "@/lib/password";
 
 export async function createAttendanceSessionAction(formData: FormData) {
   const ctx = await requireTenant("TEACHER");
@@ -204,4 +211,125 @@ export async function deleteAttendanceSessionAction(formData: FormData) {
 
   revalidatePath("/dashboard/attendance");
   redirect("/dashboard/attendance?deleted=1");
+}
+
+export async function generateAttendanceCodeAction(formData: FormData) {
+  const ctx = await requireTenant("TEACHER");
+  const sessionId = String(formData.get("sessionId") ?? "").trim();
+  const session = await db.attendanceSession.findFirst({
+    where: { id: sessionId, tenantId: ctx.tenant.id },
+    select: { id: true, courseId: true },
+  });
+  if (!session) redirect("/dashboard/attendance?error=Register+not+found");
+
+  const usedCodes = await db.attendanceSession.findMany({
+    where: { tenantId: ctx.tenant.id, checkInCode: { not: null } },
+    select: { checkInCode: true },
+  });
+  const used = new Set(usedCodes.map((row) => row.checkInCode).filter(Boolean));
+  let code = newAttendanceCode();
+  while (used.has(code)) code = newAttendanceCode();
+
+  const expiresAt = new Date(Date.now() + ATTENDANCE_CODE_MINUTES * 60_000);
+  await db.attendanceSession.update({
+    where: { id: session.id },
+    data: { checkInCode: code, checkInCodeExpiresAt: expiresAt },
+  });
+
+  await audit({
+    tenantId: ctx.tenant.id,
+    actorId: ctx.user.id,
+    action: "attendance.code.generated",
+    target: session.id,
+    meta: { courseId: session.courseId, expiresAt: expiresAt.toISOString() },
+  });
+
+  revalidatePath(`/dashboard/attendance/${session.id}`);
+  revalidatePath("/dashboard/attendance");
+  redirect(`/dashboard/attendance/${session.id}?code=generated`);
+}
+
+export async function deactivateAttendanceCodeAction(formData: FormData) {
+  const ctx = await requireTenant("TEACHER");
+  const sessionId = String(formData.get("sessionId") ?? "").trim();
+  const session = await db.attendanceSession.findFirst({
+    where: { id: sessionId, tenantId: ctx.tenant.id },
+    select: { id: true, courseId: true },
+  });
+  if (!session) redirect("/dashboard/attendance?error=Register+not+found");
+
+  await db.attendanceSession.update({
+    where: { id: session.id },
+    data: { checkInCode: null, checkInCodeExpiresAt: null },
+  });
+
+  await audit({
+    tenantId: ctx.tenant.id,
+    actorId: ctx.user.id,
+    action: "attendance.code.deactivated",
+    target: session.id,
+    meta: { courseId: session.courseId },
+  });
+
+  revalidatePath(`/dashboard/attendance/${session.id}`);
+  revalidatePath("/dashboard/attendance");
+  redirect(`/dashboard/attendance/${session.id}?code=cleared`);
+}
+
+export async function checkInAttendanceAction(formData: FormData) {
+  const ctx = await requireTenant("STUDENT");
+  const code = normalizeAttendanceCode(formData.get("code"));
+  if (code.length < 6) redirect("/learn/check-in?error=Enter+the+6-character+attendance+code");
+
+  const session = await db.attendanceSession.findFirst({
+    where: {
+      tenantId: ctx.tenant.id,
+      checkInCode: code,
+      checkInCodeExpiresAt: { gt: new Date() },
+    },
+    include: { course: { select: { id: true, title: true } } },
+  });
+  if (!session) redirect("/learn/check-in?error=That+code+is+invalid+or+has+expired");
+
+  const enrollment = await db.enrollment.findFirst({
+    where: {
+      tenantId: ctx.tenant.id,
+      courseId: session.courseId,
+      userId: ctx.user.id,
+      status: "ACTIVE",
+    },
+    select: { id: true },
+  });
+  if (!enrollment) redirect("/learn/check-in?error=Join+this+course+before+checking+in");
+
+  await db.attendanceRecord.upsert({
+    where: { sessionId_studentId: { sessionId: session.id, studentId: ctx.user.id } },
+    create: {
+      sessionId: session.id,
+      studentId: ctx.user.id,
+      status: "PRESENT",
+      note: "Self check-in",
+      markedById: ctx.user.id,
+    },
+    update: {
+      status: "PRESENT",
+      note: "Self check-in",
+      markedById: ctx.user.id,
+    },
+  });
+
+  await audit({
+    tenantId: ctx.tenant.id,
+    actorId: ctx.user.id,
+    action: "attendance.checkin",
+    target: session.id,
+    meta: { courseId: session.courseId, course: session.course.title },
+  });
+
+  revalidatePath("/learn/check-in");
+  revalidatePath(`/dashboard/attendance/${session.id}`);
+  revalidatePath("/dashboard/attendance");
+  redirect(
+    `/learn/check-in?checked=1&course=${encodeURIComponent(session.course.title)}`
+  );
 }

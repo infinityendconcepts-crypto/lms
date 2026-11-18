@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Download,
   FileText,
+  KeyRound,
   Percent,
   Save,
   Trash2,
@@ -15,7 +16,9 @@ import {
 import { db } from "@/lib/db";
 import { canAdmin, requireTenant } from "@/lib/tenant";
 import {
+  deactivateAttendanceCodeAction,
   deleteAttendanceSessionAction,
+  generateAttendanceCodeAction,
   saveAttendanceAction,
   updateAttendanceSessionAction,
 } from "@/lib/actions/attendance";
@@ -23,8 +26,10 @@ import { Avatar, Badge, PageHeader, Stat } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { formatDate } from "@/lib/utils";
 import {
+  ATTENDANCE_CODE_MINUTES,
   ATTENDANCE_META,
   ATTENDANCE_STATUSES,
+  attendanceCodeActive,
   attendanceRate,
   countStatuses,
   dateInputValue,
@@ -37,7 +42,13 @@ export default async function AttendanceRegisterPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; created?: string; existing?: string; error?: string }>;
+  searchParams: Promise<{
+    saved?: string;
+    created?: string;
+    existing?: string;
+    error?: string;
+    code?: string;
+  }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -95,16 +106,21 @@ export default async function AttendanceRegisterPage({
 
   const counts = countStatuses(effective);
   const rate = attendanceRate(effective);
+  const codeActive = attendanceCodeActive(session);
 
   const notice = sp.error
     ? { tone: "warn" as const, text: sp.error }
-    : sp.created
-      ? { tone: "ok" as const, text: "Register created — every learner starts as present." }
-      : sp.saved
-        ? { tone: "ok" as const, text: "Attendance saved." }
-        : sp.existing
-          ? { tone: "warn" as const, text: "This register already existed for that course and date." }
-          : null;
+    : sp.code === "generated"
+      ? { tone: "ok" as const, text: "New check-in code generated. Share it with your learners." }
+      : sp.code === "cleared"
+        ? { tone: "ok" as const, text: "The check-in code has been deactivated." }
+        : sp.created
+          ? { tone: "ok" as const, text: "Register created — every learner starts as present." }
+          : sp.saved
+            ? { tone: "ok" as const, text: "Attendance saved." }
+            : sp.existing
+              ? { tone: "warn" as const, text: "This register already existed for that course and date." }
+              : null;
 
   return (
     <div>
@@ -190,6 +206,52 @@ export default async function AttendanceRegisterPage({
           icon={<CalendarDays className="size-4" />}
         />
       </div>
+
+      <section className="card mt-6 overflow-hidden">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <KeyRound className="size-4 text-brand-600" /> Learner check-in code
+            </h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
+              Generate a code and share it with the class. Learners enter it on their check-in page and are marked
+              present on this register. Each code expires after {ATTENDANCE_CODE_MINUTES} minutes.
+            </p>
+          </div>
+          <Badge tone={codeActive ? "green" : "slate"}>{codeActive ? "Active" : "No active code"}</Badge>
+        </div>
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between">
+          {codeActive ? (
+            <div>
+              <p className="text-[10px] font-bold tracking-[0.14em] text-slate-400 uppercase">Code</p>
+              <p className="mt-1 font-mono text-3xl font-bold tracking-[0.28em] text-slate-900">
+                {session.checkInCode}
+              </p>
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Expires {formatDate(session.checkInCodeExpiresAt, true)}
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">No code is currently being accepted for this register.</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <form action={generateAttendanceCodeAction}>
+              <input type="hidden" name="sessionId" value={session.id} />
+              <SubmitButton pendingText="Generating…">
+                <KeyRound className="size-3.5" /> {codeActive ? "Generate new code" : "Generate code"}
+              </SubmitButton>
+            </form>
+            {codeActive && (
+              <form action={deactivateAttendanceCodeAction}>
+                <input type="hidden" name="sessionId" value={session.id} />
+                <SubmitButton variant="secondary" pendingText="Deactivating…">
+                  Deactivate
+                </SubmitButton>
+              </form>
+            )}
+          </div>
+        </div>
+      </section>
 
       <form action={saveAttendanceAction} className="card mt-6">
         <input type="hidden" name="sessionId" value={session.id} />

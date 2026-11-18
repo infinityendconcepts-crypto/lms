@@ -88,6 +88,7 @@ export function SidebarNav({
       items: [
         { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
         { href: "/dashboard/courses", label: "My courses", icon: BookOpen },
+        { href: "/learn/check-in", label: "Attendance check-in", icon: CalendarCheck },
         { href: "/dashboard/results", label: "My results", icon: BarChart3 },
       ],
     });

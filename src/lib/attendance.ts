@@ -97,3 +97,69 @@ export function dateInputValue(date: Date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);
 }
+
+/** Classroom codes are short-lived; teachers can generate a fresh one anytime. */
+export const ATTENDANCE_CODE_MINUTES = 30;
+
+export function normalizeAttendanceCode(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8);
+}
+
+export function attendanceCodeActive(
+  session: { checkInCode: string | null; checkInCodeExpiresAt: Date | null },
+  now = new Date()
+) {
+  return Boolean(
+    session.checkInCode &&
+      session.checkInCodeExpiresAt &&
+      session.checkInCodeExpiresAt.getTime() > now.getTime()
+  );
+}
+
+/** Parse a yyyy-mm-dd value strictly so invalid calendar links fall back safely. */
+export function parseDateInput(value?: string | null): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(parsed.getTime()) || dateInputValue(parsed) !== value) return null;
+  return parsed;
+}
+
+/** Always return a local-noon date on the first of a month. */
+export function monthDate(value?: string | null) {
+  const match = typeof value === "string" ? value.match(/^(\d{4})-(\d{2})$/) : null;
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (month >= 1 && month <= 12) return new Date(year, month - 1, 1, 12);
+  }
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1, 12);
+}
+
+export function shiftMonth(date: Date, offset: number) {
+  return new Date(date.getFullYear(), date.getMonth() + offset, 1, 12);
+}
+
+export function monthBounds(date: Date) {
+  return {
+    start: new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0),
+    end: new Date(date.getFullYear(), date.getMonth() + 1, 1, 0, 0, 0, 0),
+  };
+}
+
+/** Sunday-first calendar grid padded to whole weeks; null means an empty cell. */
+export function calendarMonthDays(date: Date): (Date | null)[] {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const leading = new Date(year, month, 1, 12).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days: (Date | null)[] = [];
+  for (let i = 0; i < leading; i += 1) days.push(null);
+  for (let day = 1; day <= daysInMonth; day += 1) days.push(new Date(year, month, day, 12));
+  while (days.length % 7 !== 0) days.push(null);
+  return days;
+}

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCb);
@@ -27,4 +27,15 @@ export function newToken(bytes = 32): string {
 /** Tokens are stored hashed so a database leak cannot be replayed. */
 export function tokenHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+/** Short classroom code without easily confused characters (I/O/0/1). */
+const ATTENDANCE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export function newAttendanceCode(length = 6): string {
+  let code = "";
+  for (let i = 0; i < length; i += 1) {
+    code += ATTENDANCE_CODE_ALPHABET[randomInt(ATTENDANCE_CODE_ALPHABET.length)];
+  }
+  return code;
 }

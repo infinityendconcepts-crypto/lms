@@ -417,12 +417,14 @@ model AttendanceSession {
   tenantId    String
   courseId    String
   lessonId    String?
-  title       String?
-  date        DateTime
-  notes       String?
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  title               String?
+  date                DateTime
+  notes               String?
+  checkInCode         String?
+  checkInCodeExpiresAt DateTime?
+  createdById         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   course    Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -430,6 +432,7 @@ model AttendanceSession {
   createdBy User?              @relation("AttendanceCreator", fields: [createdById], references: [id], onDelete: SetNull)
   records   AttendanceRecord[]
 
+  @@unique([tenantId, checkInCode])
   @@index([tenantId, date])
   @@index([courseId, date])
 }
