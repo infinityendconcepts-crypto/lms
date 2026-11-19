@@ -19,10 +19,12 @@ import { deleteLessonAction, updateLessonAction } from "@/lib/actions/course";
 import { deleteAttachmentAction } from "@/lib/actions/course";
 import { Badge, StatusBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { RichTextEditor } from "@/components/RichTextEditor";
+import { LessonTypeBadge, LessonTypeIcon } from "@/components/LessonTypeBadge";
+import { LessonTypeFields } from "@/components/dashboard/LessonTypeFields";
 import { UploadField } from "@/components/UploadField";
 import { MathText } from "@/components/MathText";
 import { AiContentAssist } from "@/components/ai/AiContentAssist";
+import { LESSON_TYPE_META, lessonTypeFrom } from "@/lib/lesson-types";
 import { providerOptions } from "@/lib/ai/benchmark";
 import { formatBytes } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
@@ -44,7 +46,15 @@ export default async function LessonEditorPage({
   const lesson = await db.lesson.findFirst({
     where: { id, course: { tenantId: ctx.tenant.id } },
     include: {
-      course: { include: { lessons: { orderBy: { order: "asc" } } } },
+      course: {
+        include: {
+          lessons: { orderBy: { order: "asc" } },
+          codePads: {
+            orderBy: { order: "asc" },
+            select: { id: true, title: true, language: true },
+          },
+        },
+      },
       attachments: { orderBy: { createdAt: "desc" } },
     },
   });
@@ -53,6 +63,8 @@ export default async function LessonEditorPage({
   const index = lesson.course.lessons.findIndex((l) => l.id === lesson.id);
   const previous = index > 0 ? lesson.course.lessons[index - 1] : null;
   const next = index >= 0 ? lesson.course.lessons[index + 1] : null;
+  const lessonType = lessonTypeFrom(lesson.lessonType);
+  const typeMeta = LESSON_TYPE_META[lessonType];
   const aiProviders = await providerOptions(ctx.tenant.id);
 
   return (
@@ -87,6 +99,7 @@ export default async function LessonEditorPage({
             <Badge tone={lesson.published ? "green" : "slate"}>
               {lesson.published ? "Published" : "Draft"}
             </Badge>
+            <LessonTypeBadge type={lesson.lessonType} />
             <Badge>
               Lesson {index + 1} of {lesson.course.lessons.length}
             </Badge>
@@ -144,46 +157,30 @@ export default async function LessonEditorPage({
                   className="input"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label" htmlFor="lesson-minutes">
-                    Minutes
-                  </label>
-                  <input
-                    id="lesson-minutes"
-                    name="estimatedMinutes"
-                    type="number"
-                    min={1}
-                    defaultValue={lesson.estimatedMinutes}
-                    className="input"
-                  />
-                </div>
-                <div>
-                  <label className="label" htmlFor="lesson-meeting">
-                    Video or meeting URL
-                  </label>
-                  <input
-                    id="lesson-meeting"
-                    name="meetingUrl"
-                    type="url"
-                    defaultValue={lesson.meetingUrl ?? ""}
-                    placeholder="https://youtube.com/watch?v=… or https://meet…"
-                    className="input"
-                  />
-                  <p className="mt-1 text-[9px] leading-3 text-slate-400">
-                    YouTube and Vimeo links play inline; other links open as a join button.
-                  </p>
-                </div>
+              <div>
+                <label className="label" htmlFor="lesson-minutes">
+                  Estimated minutes
+                </label>
+                <input
+                  id="lesson-minutes"
+                  name="estimatedMinutes"
+                  type="number"
+                  min={1}
+                  defaultValue={lesson.estimatedMinutes}
+                  className="input"
+                />
               </div>
             </div>
 
-            <RichTextEditor
-              name="content"
-              label="Lesson content"
-              defaultValue={lesson.content}
-              rows={16}
-              placeholder={"# Learning objectives\n\nBy the end of this lesson you can solve $ax^2+bx+c=0$.\n\n## Worked example\n\n$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$"}
-            />
+            <div className="border-t border-slate-100 pt-4">
+              <LessonTypeFields
+                initialType={lesson.lessonType}
+                content={lesson.content}
+                meetingUrl={lesson.meetingUrl}
+                codePadId={lesson.codePadId}
+                codePads={lesson.course.codePads}
+              />
+            </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
               <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
@@ -288,9 +285,9 @@ export default async function LessonEditorPage({
           />
 
           <div className="card p-5">
-            <h2 className="text-sm font-bold text-slate-900">Lesson preview</h2>
+            <h2 className="text-sm font-bold text-slate-900">{typeMeta.editorLabel} preview</h2>
             <p className="mt-1 text-[11px] text-slate-500">
-              Exactly what learners see, with math rendered.
+              Exactly what learners see, with math and formatting rendered.
             </p>
             <div className="mt-3 max-h-[420px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 thin-scroll">
               {lesson.content.trim() ? (
@@ -319,6 +316,10 @@ export default async function LessonEditorPage({
                     <span className="w-4 text-[10px] font-bold text-slate-400">
                       {String(i + 1).padStart(2, "0")}
                     </span>
+                    <LessonTypeIcon
+                      type={item.lessonType}
+                      className="size-3 shrink-0 text-slate-400"
+                    />
                     <span className="min-w-0 flex-1 truncate">{item.title}</span>
                     <StatusBadge status={item.published ? "PUBLISHED" : "DRAFT"} />
                   </Link>
@@ -335,6 +336,10 @@ export default async function LessonEditorPage({
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-400">Position</dt>
                 <dd className="font-medium text-slate-700">{index + 1}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-400">Type</dt>
+                <dd className="font-medium text-slate-700">{typeMeta.label}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-400">Created</dt>

@@ -291,20 +291,24 @@ model Lesson {
   title            String
   summary          String?
   content          String   @default("")
+  lessonType       String   @default("TEXT") // TEXT | CODE | MATH | VISUAL
   estimatedMinutes Int      @default(15)
   order            Int      @default(0)
   published        Boolean  @default(false)
   meetingUrl       String?
+  codePadId        String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
   stage              CourseStage?        @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  codePad            CodePad?            @relation(fields: [codePadId], references: [id], onDelete: SetNull)
   attachments        Attachment[]
   completions        LessonCompletion[]
   attendanceSessions AttendanceSession[]
 
   @@index([courseId, order])
+  @@index([courseId, lessonType])
   @@index([stageId])
 }
 
@@ -695,6 +699,7 @@ model CodePad {
   tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   course      Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
   createdBy   User?               @relation("CodePadAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  lessons     Lesson[]
   submissions CodePadSubmission[]
 
   @@index([courseId, order])

@@ -68,9 +68,18 @@ import { Avatar, Badge, EmptyState, Progress, StatusBadge, Tabs } from "@/compon
 import { SubmitButton } from "@/components/SubmitButton";
 import { CoursePlanBoard, type PlanTaskView } from "@/components/CoursePlanBoard";
 import { UploadField } from "@/components/UploadField";
+import { LessonTypeBadge, LessonTypeIcon } from "@/components/LessonTypeBadge";
+import { LessonTypeFields } from "@/components/dashboard/LessonTypeFields";
+import {
+  LESSON_TYPES,
+  LESSON_TYPE_META,
+  isLessonType,
+  lessonTypeFrom,
+  type LessonType,
+} from "@/lib/lesson-types";
 import { formatBytes } from "@/lib/storage";
 import { currencyFor } from "@/lib/plans";
-import { formatDate, formatMoney, nowMs } from "@/lib/utils";
+import { cn, formatDate, formatMoney, nowMs } from "@/lib/utils";
 
 export const metadata = { title: "Course" };
 
@@ -83,7 +92,13 @@ export default async function CourseDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; saved?: string; error?: string; enrolled?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    saved?: string;
+    error?: string;
+    enrolled?: string;
+    lessonType?: string;
+  }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -146,6 +161,23 @@ export default async function CourseDetailPage({
   });
 
   const tab = sp.tab ?? "content";
+  const selectedLessonType: LessonType | "ALL" =
+    sp.lessonType === "ALL" ? "ALL" : isLessonType(sp.lessonType) ? sp.lessonType : "ALL";
+  const lessonTypeCounts = LESSON_TYPES.reduce<Record<LessonType, number>>(
+    (counts, type) => {
+      counts[type] = course.lessons.filter((lesson) => lessonTypeFrom(lesson.lessonType) === type).length;
+      return counts;
+    },
+    { TEXT: 0, CODE: 0, MATH: 0, VISUAL: 0 }
+  );
+  const visibleLessons = course.lessons
+    .map((lesson, index) => ({ lesson, index }))
+    .filter(
+      ({ lesson }) =>
+        selectedLessonType === "ALL" || lessonTypeFrom(lesson.lessonType) === selectedLessonType
+    );
+  const lessonTypeHref = (value: LessonType | "ALL") =>
+    `/dashboard/courses/${course.id}?tab=content&lessonType=${value}`;
   const documents = course.attachments.filter((a) => !a.lessonId);
   const avgProgress = course.enrollments.length
     ? Math.round(
@@ -362,20 +394,65 @@ export default async function CourseDetailPage({
         <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
           <section className="card overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
-              <h2 className="text-sm font-bold text-slate-900">Lessons</h2>
-              <span className="text-[11px] text-slate-400">Ordered learning path</span>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Lessons</h2>
+                <p className="mt-0.5 text-[10px] text-slate-400">
+                  Choose a type to focus the learning path.
+                </p>
+              </div>
+              <span className="text-[11px] text-slate-400">
+                {visibleLessons.length} of {course.lessons.length}
+              </span>
             </div>
-            {course.lessons.length === 0 ? (
+
+            <div className="flex flex-wrap gap-1.5 border-b border-slate-100 px-5 py-3">
+              <Link
+                href={lessonTypeHref("ALL")}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
+                  selectedLessonType === "ALL"
+                    ? "bg-brand-600 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                )}
+              >
+                All <span className="opacity-70">{course.lessons.length}</span>
+              </Link>
+              {LESSON_TYPES.map((type) => {
+                const active = selectedLessonType === type;
+                return (
+                  <Link
+                    key={type}
+                    href={lessonTypeHref(type)}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
+                      active
+                        ? "bg-brand-600 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    )}
+                  >
+                    <LessonTypeIcon type={type} className="size-3" />
+                    {LESSON_TYPE_META[type].label}
+                    <span className="opacity-70">{lessonTypeCounts[type]}</span>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {visibleLessons.length === 0 ? (
               <div className="p-5">
                 <EmptyState
                   icon={<BookOpen className="size-5" />}
-                  title="No lessons yet"
-                  description="Add a lesson with rich text, LaTeX math and attachments."
+                  title={
+                    selectedLessonType === "ALL"
+                      ? "No lessons yet"
+                      : `No ${LESSON_TYPE_META[selectedLessonType].label} lessons`
+                  }
+                  description="Add a lesson and choose its type to organize the learning path."
                 />
               </div>
             ) : (
               <ol className="divide-y divide-slate-100">
-                {course.lessons.map((lesson, index) => (
+                {visibleLessons.map(({ lesson, index }) => (
                   <li key={lesson.id}>
                     <Link
                       href={`/dashboard/lessons/${lesson.id}`}
@@ -392,6 +469,11 @@ export default async function CourseDetailPage({
                           {lesson.summary || "No summary"} · {lesson.estimatedMinutes} min
                         </p>
                       </div>
+                      <LessonTypeBadge
+                        type={lesson.lessonType}
+                        compact
+                        className="hidden sm:inline-flex"
+                      />
                       <Badge tone={lesson.published ? "green" : "slate"}>
                         {lesson.published ? "Published" : "Draft"}
                       </Badge>
@@ -401,17 +483,27 @@ export default async function CourseDetailPage({
                 ))}
               </ol>
             )}
-            <form action={createLessonAction} className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/50 p-4 sm:flex-row">
+
+            <form action={createLessonAction} className="space-y-4 border-t border-slate-100 bg-slate-50/50 p-4">
               <input type="hidden" name="courseId" value={course.id} />
-              <input
-                name="title"
-                required
-                placeholder="New lesson title…"
-                className="input flex-1 bg-white"
-              />
-              <SubmitButton pendingText="Adding…">
-                <Plus className="size-3.5" /> Add lesson
-              </SubmitButton>
+              <div>
+                <label className="label" htmlFor="new-lesson-title">
+                  New lesson title
+                </label>
+                <input
+                  id="new-lesson-title"
+                  name="title"
+                  required
+                  placeholder="e.g. Build a quadratic explorer"
+                  className="input bg-white"
+                />
+              </div>
+              <LessonTypeFields compact />
+              <div className="flex justify-end">
+                <SubmitButton pendingText="Adding…">
+                  <Plus className="size-3.5" /> Add lesson
+                </SubmitButton>
+              </div>
             </form>
           </section>
 
