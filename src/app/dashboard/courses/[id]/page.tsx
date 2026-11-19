@@ -168,7 +168,7 @@ export default async function CourseDetailPage({
       counts[type] = course.lessons.filter((lesson) => lessonTypeFrom(lesson.lessonType) === type).length;
       return counts;
     },
-    { TEXT: 0, CODE: 0, MATH: 0, VISUAL: 0 }
+    Object.fromEntries(LESSON_TYPES.map((type) => [type, 0])) as Record<LessonType, number>
   );
   const visibleLessons = course.lessons
     .map((lesson, index) => ({ lesson, index }))

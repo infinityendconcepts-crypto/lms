@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock,
   Code2,
+  Database,
   Download,
   FileText,
   GraduationCap,
@@ -19,6 +20,7 @@ import { markLessonCompleteAction } from "@/lib/actions/course";
 import { SubmitButton } from "@/components/SubmitButton";
 import { MathText } from "@/components/MathText";
 import { LessonTypeBadge } from "@/components/LessonTypeBadge";
+import { LessonTypeToolkit } from "@/components/LessonTypeToolkit";
 import { LessonVideoEmbed, UploadedVideoPlayer } from "@/components/VideoPlayer";
 import { LESSON_TYPE_META, lessonTypeFrom } from "@/lib/lesson-types";
 import { formatBytes } from "@/lib/storage";
@@ -77,8 +79,17 @@ export default async function LearnLessonPage({
         ? "Open design reference"
         : lessonType === "MATH"
           ? "Open worked solution"
-          : "Open lesson link";
-  const ReferenceIcon = lessonType === "CODE" ? Code2 : lessonType === "VISUAL" ? Palette : Video;
+          : lessonType === "DATA_SCIENCE"
+            ? "Open notebook or dataset"
+            : "Open lesson link";
+  const ReferenceIcon =
+    lessonType === "CODE"
+      ? Code2
+      : lessonType === "VISUAL"
+        ? Palette
+        : lessonType === "DATA_SCIENCE"
+          ? Database
+          : Video;
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -172,6 +183,8 @@ export default async function LearnLessonPage({
             )}
           </div>
         </article>
+
+        <LessonTypeToolkit type={lesson.lessonType} className="mt-4" />
 
         {lesson.attachments.some((file) => file.kind !== "video") && (
           <section className="card mt-5 overflow-hidden">

@@ -1,4 +1,4 @@
-import { BookOpen, Code2, Palette, Sigma } from "lucide-react";
+import { BookOpen, Code2, Database, Palette, Sigma } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { LESSON_TYPE_META, lessonTypeFrom } from "@/lib/lesson-types";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ const TYPE_ICONS = {
   CODE: Code2,
   MATH: Sigma,
   VISUAL: Palette,
+  DATA_SCIENCE: Database,
 } as const;
 
 export function LessonTypeIcon({

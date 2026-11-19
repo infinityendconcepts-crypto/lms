@@ -950,6 +950,31 @@ Upload your final design and any source files below. Use the design reference li
     },
   });
 
+  await db.lesson.create({
+    data: {
+      courseId: algebra.id,
+      stageId: algebraStages[2].id,
+      title: "Data lab: modelling projectile motion",
+      summary: "Fit a quadratic to height data in a notebook and explain the result.",
+      lessonType: "DATA_SCIENCE",
+      order: 7,
+      published: true,
+      estimatedMinutes: 40,
+      meetingUrl: "https://colab.research.google.com/",
+      content: `# Data lab: modelling projectile motion
+
+Open a notebook and load the sample height readings for a ball thrown upward. Plot the points first, then fit a quadratic model $h(t)=at^2+bt+c$.
+
+## Deliverable
+
+- A scatter plot with the observed points and the fitted curve
+- The fitted equation and its vertex
+- A short conclusion: when does the model stop being realistic?
+
+Use the recommended tools panel to choose a notebook workspace and a dataset source.`,
+    },
+  });
+
   await db.codePadSubmission.createMany({
     data: [
       {

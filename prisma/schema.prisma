@@ -291,7 +291,7 @@ model Lesson {
   title            String
   summary          String?
   content          String   @default("")
-  lessonType       String   @default("TEXT") // TEXT | CODE | MATH | VISUAL
+  lessonType       String   @default("TEXT") // TEXT | CODE | MATH | VISUAL | DATA_SCIENCE
   estimatedMinutes Int      @default(15)
   order            Int      @default(0)
   published        Boolean  @default(false)

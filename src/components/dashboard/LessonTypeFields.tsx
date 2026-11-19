@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Code2, Palette, Sigma } from "lucide-react";
+import { BookOpen, Code2, Database, Palette, Sigma } from "lucide-react";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { LessonTypeToolkit } from "@/components/LessonTypeToolkit";
 import {
   LESSON_TYPES,
   LESSON_TYPE_META,
@@ -16,6 +17,7 @@ const TYPE_ICONS = {
   CODE: Code2,
   MATH: Sigma,
   VISUAL: Palette,
+  DATA_SCIENCE: Database,
 } as const;
 
 export function LessonTypeFields({
@@ -43,7 +45,7 @@ export function LessonTypeFields({
         <div
           className={cn(
             "grid gap-2",
-            compact ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 lg:grid-cols-4"
+            compact ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 lg:grid-cols-5"
           )}
         >
           {LESSON_TYPES.map((option) => {
@@ -87,17 +89,23 @@ export function LessonTypeFields({
           })}
         </div>
         <p className="mt-2 text-[10px] leading-4 text-slate-500">{meta.description}</p>
+        {compact && (
+          <p className="mt-1 text-[9px] leading-3 text-slate-400">
+            Tools: {meta.tools.map((tool) => tool.name).join(" · ")}
+          </p>
+        )}
       </fieldset>
 
       {!compact && (
         <>
+          <LessonTypeToolkit type={type} />
           <RichTextEditor
             name="content"
             label={meta.editorLabel}
             defaultValue={content}
             placeholder={meta.placeholder}
             rows={16}
-            toolbar={type === "MATH" || type === "TEXT"}
+            toolbar={type === "MATH" || type === "TEXT" || type === "DATA_SCIENCE"}
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -111,11 +119,13 @@ export function LessonTypeFields({
                 type="url"
                 defaultValue={meetingUrl ?? ""}
                 placeholder={
-                  type === "VISUAL"
-                    ? "https://behance.net/gallery/…"
-                    : type === "CODE"
-                      ? "https://developer.mozilla.org/…"
-                      : "https://youtube.com/watch?v=…"
+                  type === "DATA_SCIENCE"
+                    ? "https://colab.research.google.com/…"
+                    : type === "VISUAL"
+                      ? "https://behance.net/gallery/…"
+                      : type === "CODE"
+                        ? "https://developer.mozilla.org/…"
+                        : "https://youtube.com/watch?v=…"
                 }
                 className="input"
               />
