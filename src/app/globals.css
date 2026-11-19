@@ -184,6 +184,11 @@
   }
 }
 
+/* Tailwind utilities can override the UA rule that hides closed details panels. */
+details:not([open]) > *:not(summary) {
+  display: none !important;
+}
+
 .katex {
   font-size: 1.05em;
 }
