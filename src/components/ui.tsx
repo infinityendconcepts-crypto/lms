@@ -213,7 +213,7 @@ export function Tabs({
   current: string;
 }) {
   return (
-    <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
+    <div className="thin-scroll mb-6 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
       {items.map((item) => (
         <Link
           key={item.href}

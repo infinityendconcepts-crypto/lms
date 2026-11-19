@@ -88,7 +88,7 @@ export function UploadField({
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="max-w-[220px] truncate text-xs font-medium text-brand-600 hover:underline"
+              className="min-w-0 max-w-full truncate text-xs font-medium text-brand-600 hover:underline sm:max-w-[220px]"
             >
               {fileName || url.split("/").pop()}
             </a>
@@ -122,7 +122,7 @@ export function UploadField({
         <img
           src={url}
           alt="Preview"
-          className="mt-2 max-h-40 rounded-xl border border-slate-200 object-contain"
+          className="mt-2 max-h-40 max-w-full rounded-xl border border-slate-200 object-contain"
         />
       )}
       {error && <p className="mt-1.5 text-xs font-medium text-rose-600">{error}</p>}

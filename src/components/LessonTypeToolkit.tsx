@@ -21,7 +21,7 @@ export function LessonTypeToolkit({
         </h3>
       </div>
       <p className="mt-1 text-[10px] leading-4 text-slate-500">{meta.toolkitHint}</p>
-      <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
+      <div className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
         {meta.tools.map((tool) => (
           <a
             key={tool.name}

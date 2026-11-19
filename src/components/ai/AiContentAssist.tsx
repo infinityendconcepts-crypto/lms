@@ -94,11 +94,11 @@ export function AiContentAssist({
 
   return (
     <section className="card overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-100 bg-brand-50/50 px-5 py-3.5">
+      <div className="flex flex-col gap-1 border-b border-slate-100 bg-brand-50/50 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
           <Sparkles className="size-4 text-brand-600" /> AI content assist
         </h2>
-        <span className="text-[10px] text-slate-400">Local-first · no key required</span>
+        <span className="hidden text-[10px] text-slate-400 sm:inline">Local-first · no key required</span>
       </div>
 
       <div className="space-y-4 p-5">

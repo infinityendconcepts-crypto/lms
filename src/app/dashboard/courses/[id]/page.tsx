@@ -250,11 +250,11 @@ export default async function CourseDetailPage({
         <p className="truncate text-[11px] font-semibold text-slate-800">{item.title}</p>
         <p className="text-[9px] uppercase tracking-wider text-slate-400">{item.meta}</p>
       </div>
-      <form action={assignStageAction} className="flex shrink-0 items-center gap-1.5">
+      <form action={assignStageAction} className="flex w-full items-center gap-1.5 sm:w-auto sm:shrink-0">
         <input type="hidden" name="courseId" value={course.id} />
         <input type="hidden" name="itemId" value={item.id} />
         <input type="hidden" name="kind" value={item.kind} />
-        <select name="stageId" defaultValue={item.stageId ?? ""} className="select w-36 py-1 text-[10px]">
+        <select name="stageId" defaultValue={item.stageId ?? ""} className="select w-full py-1 text-[10px] sm:w-36">
           <option value="">Unassigned</option>
           {course.stages.map((stage) => (
             <option key={stage.id} value={stage.id}>
@@ -328,7 +328,7 @@ export default async function CourseDetailPage({
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-4">
         {[
           ["Lessons", course.lessons.length, BookOpen],
           ["Assessments", course.assessments.length, ClipboardCheck],
@@ -338,11 +338,11 @@ export default async function CourseDetailPage({
           const I = Icon as typeof BookOpen;
           return (
             <div key={label as string} className="card flex items-center gap-3 p-4">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
                 <I className="size-4" />
               </span>
-              <div>
-                <p className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+              <div className="min-w-0">
+                <p className="truncate text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
                   {label as string}
                 </p>
                 <p className="text-lg font-bold text-slate-900">{value as string}</p>
@@ -405,11 +405,11 @@ export default async function CourseDetailPage({
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 border-b border-slate-100 px-5 py-3">
+            <div className="thin-scroll flex gap-1.5 overflow-x-auto border-b border-slate-100 px-5 py-3 sm:flex-wrap sm:overflow-visible">
               <Link
                 href={lessonTypeHref("ALL")}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
+                  "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
                   selectedLessonType === "ALL"
                     ? "bg-brand-600 text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -424,7 +424,7 @@ export default async function CourseDetailPage({
                     key={type}
                     href={lessonTypeHref(type)}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
+                      "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
                       active
                         ? "bg-brand-600 text-white"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -477,7 +477,7 @@ export default async function CourseDetailPage({
                       <Badge tone={lesson.published ? "green" : "slate"}>
                         {lesson.published ? "Published" : "Draft"}
                       </Badge>
-                      <ArrowRight className="size-3.5 text-slate-300 group-hover:text-brand-600" />
+                      <ArrowRight className="size-3.5 shrink-0 text-slate-300 group-hover:text-brand-600" />
                     </Link>
                   </li>
                 ))}
@@ -499,8 +499,8 @@ export default async function CourseDetailPage({
                 />
               </div>
               <LessonTypeFields compact />
-              <div className="flex justify-end">
-                <SubmitButton pendingText="Adding…">
+              <div className="flex flex-col sm:flex-row sm:justify-end">
+                <SubmitButton className="w-full sm:w-auto" pendingText="Adding…">
                   <Plus className="size-3.5" /> Add lesson
                 </SubmitButton>
               </div>
@@ -937,7 +937,7 @@ export default async function CourseDetailPage({
 
       {tab === "plan" && (
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-4">
             {[
               { label: "Total tasks", value: planTaskViews.length, Icon: LayoutGrid, color: "bg-brand-50 text-brand-600" },
               {
@@ -960,11 +960,11 @@ export default async function CourseDetailPage({
               },
             ].map(({ label, value, Icon, color }) => (
               <div key={label} className="card flex items-center gap-3 p-4">
-                <span className={`flex size-9 items-center justify-center rounded-xl ${color}`}>
+                <span className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${color}`}>
                   <Icon className="size-4" />
                 </span>
-                <div>
-                  <p className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{label}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{label}</p>
                   <p className="text-lg font-bold text-slate-900">{value}</p>
                 </div>
               </div>
@@ -1188,7 +1188,7 @@ export default async function CourseDetailPage({
                     className="textarea"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="label" htmlFor="new-plan-status">
                       Status
@@ -1240,7 +1240,7 @@ export default async function CourseDetailPage({
                     ))}
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="label" htmlFor="new-plan-start">
                       Start date
@@ -1412,7 +1412,7 @@ export default async function CourseDetailPage({
                 <option value="OTHER">Other</option>
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="label" htmlFor="expense-vendor">
                   Vendor
@@ -1446,8 +1446,8 @@ export default async function CourseDetailPage({
         <div className="space-y-5">
           <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
             <div className="card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
-                <div>
+              <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <Code2 className="size-4 text-brand-500" /> Coding pads
                   </h2>
@@ -1455,7 +1455,7 @@ export default async function CourseDetailPage({
                     Browser labs for HTML, CSS, JavaScript and saved work for other languages.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {padReviewCount > 0 && <Badge tone="sky">{padReviewCount} to review</Badge>}
                   <Badge>{course.codePads.length} pads</Badge>
                 </div>

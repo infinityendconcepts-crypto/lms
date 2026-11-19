@@ -225,27 +225,35 @@ export default async function LearnLessonPage({
 
         <nav className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           {previous ? (
-            <Link href={`/learn/${courseId}/lessons/${previous.id}`} className="btn-secondary btn-sm">
-              <ArrowLeft className="size-3.5" /> {previous.title}
+            <Link
+              href={`/learn/${courseId}/lessons/${previous.id}`}
+              className="btn-secondary btn-sm max-w-full min-w-0 sm:max-w-[45%]"
+            >
+              <ArrowLeft className="size-3.5 shrink-0" />
+              <span className="truncate">{previous.title}</span>
             </Link>
           ) : (
             <span />
           )}
           {next && (
-            <Link href={`/learn/${courseId}/lessons/${next.id}`} className="btn-secondary btn-sm sm:ml-auto">
-              {next.title} <ArrowRight className="size-3.5" />
+            <Link
+              href={`/learn/${courseId}/lessons/${next.id}`}
+              className="btn-secondary btn-sm max-w-full min-w-0 sm:ml-auto sm:max-w-[45%]"
+            >
+              <span className="truncate">{next.title}</span>
+              <ArrowRight className="size-3.5 shrink-0" />
             </Link>
           )}
         </nav>
 
         <div className="mt-8 border-t border-slate-200 pt-6">
           {teacher ? (
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4">
-              <div>
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-800">You are previewing as a teacher.</p>
                 <p className="text-xs text-slate-500">Completion tracking is student-only.</p>
               </div>
-              <Link href={`/dashboard/lessons/${lesson.id}`} className="btn-secondary btn-sm">
+              <Link href={`/dashboard/lessons/${lesson.id}`} className="btn-secondary btn-sm shrink-0">
                 <GraduationCap className="size-3.5" /> Manage
               </Link>
             </div>

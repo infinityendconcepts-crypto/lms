@@ -72,11 +72,12 @@ export default async function LessonEditorPage({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Link
           href={`/dashboard/courses/${lesson.courseId}?tab=content`}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800"
+          className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800"
         >
-          <ArrowLeft className="size-3.5" /> {lesson.course.title}
+          <ArrowLeft className="size-3.5 shrink-0" />
+          <span className="truncate">{lesson.course.title}</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {previous && (
             <Link href={`/dashboard/lessons/${previous.id}`} className="btn-ghost btn-sm">
               <ArrowLeft className="size-3" /> Prev
@@ -128,8 +129,8 @@ export default async function LessonEditorPage({
         </div>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
-        <div className="space-y-5">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[1.6fr_1fr]">
+        <div className="min-w-0 space-y-5">
           <form action={updateLessonAction} className="card-pad space-y-4">
             <input type="hidden" name="lessonId" value={lesson.id} />
             <div className="grid gap-4 sm:grid-cols-2">
@@ -268,7 +269,7 @@ export default async function LessonEditorPage({
           </div>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <AiContentAssist
             lessonId={lesson.id}
             courseId={lesson.courseId}

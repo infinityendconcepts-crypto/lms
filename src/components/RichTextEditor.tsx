@@ -27,7 +27,12 @@ export function MathToolbar({
   compact?: boolean;
 }) {
   return (
-    <div className={cn("flex flex-wrap items-center gap-1", compact ? "text-[11px]" : "text-xs")}>
+    <div
+      className={cn(
+        "thin-scroll flex flex-nowrap items-center gap-1 overflow-x-auto pb-1",
+        compact ? "text-[11px]" : "text-xs"
+      )}
+    >
       <span className="mr-1 inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-1 font-mono text-[10px] text-slate-500">
         <Sigma className="size-3" /> TeX
       </span>
@@ -36,7 +41,7 @@ export function MathToolbar({
           key={s.label}
           type="button"
           onClick={() => onInsert(s.value)}
-          className="rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+          className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
           title={`Insert ${s.value}`}
         >
           {s.label}
@@ -105,7 +110,7 @@ export function RichTextEditor({
 
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
         <label className="label mb-0" htmlFor={name}>
           {label}
         </label>
