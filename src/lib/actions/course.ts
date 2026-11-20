@@ -14,6 +14,8 @@ import {
   parseLessonBlocks,
   sanitizeBlocksForSave,
 } from "@/lib/lesson-blocks";
+import { getLessonLockReason, hasPrerequisiteCycle } from "@/lib/lesson-access";
+import { nowMs } from "@/lib/utils";
 
 async function courseInTenant(courseId: string, tenantId: string) {
   const course = await db.course.findFirst({ where: { id: courseId, tenantId } });
@@ -35,6 +37,13 @@ async function lessonCodePadId({
   const pad = await db.codePad.findFirst({ where: { id: codePadId, courseId, tenantId } });
   if (!pad) throw new Error("Coding pad not found");
   return pad.id;
+}
+
+function dateInputOrNull(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? ("invalid" as const) : date;
 }
 
 export async function createCourseAction(formData: FormData) {
@@ -163,6 +172,46 @@ export async function updateLessonAction(formData: FormData) {
     include: { course: true },
   });
   if (!lesson || lesson.course.tenantId !== ctx.tenant.id) throw new Error("Lesson not found");
+
+  const siblings = await db.lesson.findMany({
+    where: { courseId: lesson.courseId },
+    orderBy: { order: "asc" },
+    select: { id: true, title: true, prerequisiteIds: true, opensAt: true, closesAt: true },
+  });
+  const requestedPrerequisites = [
+    ...new Set(
+      formData
+        .getAll("prerequisiteIds")
+        .map((id) => String(id).trim())
+        .filter(Boolean)
+    ),
+  ];
+  const siblingIds = new Set(siblings.map((item) => item.id));
+  if (
+    requestedPrerequisites.some((id) => id === lessonId || !siblingIds.has(id)) ||
+    hasPrerequisiteCycle({ lessonId, prerequisiteIds: requestedPrerequisites, lessons: siblings })
+  ) {
+    redirect(
+      `/dashboard/lessons/${lessonId}?error=${encodeURIComponent(
+        "Choose valid prerequisites without creating a cycle."
+      )}`
+    );
+  }
+
+  const opensAt = dateInputOrNull(formData.get("opensAt"));
+  const closesAt = dateInputOrNull(formData.get("closesAt"));
+  if (
+    opensAt === "invalid" ||
+    closesAt === "invalid" ||
+    (opensAt && closesAt && closesAt.getTime() < opensAt.getTime())
+  ) {
+    redirect(
+      `/dashboard/lessons/${lessonId}?error=${encodeURIComponent(
+        "Check the lesson open and close dates."
+      )}`
+    );
+  }
+
   const allowedPadIds = await db.codePad.findMany({
     where: { courseId: lesson.courseId, tenantId: ctx.tenant.id },
     select: { id: true },
@@ -189,6 +238,9 @@ export async function updateLessonAction(formData: FormData) {
       summary: String(formData.get("summary") ?? "").trim() || null,
       content: markdown,
       contentBlocks: JSON.stringify(blocks),
+      prerequisiteIds: JSON.stringify(requestedPrerequisites),
+      opensAt,
+      closesAt,
       codePadId,
       estimatedMinutes: Math.max(1, Number(formData.get("estimatedMinutes") ?? 15) || 15),
       meetingUrl,
@@ -328,6 +380,24 @@ export async function markLessonCompleteAction(formData: FormData) {
     where: { courseId_userId: { courseId: lesson.courseId, userId: ctx.user.id } },
   });
   if (!enrollment) return;
+
+  const [siblings, completions] = await Promise.all([
+    db.lesson.findMany({
+      where: { courseId: lesson.courseId },
+      select: { id: true, title: true, prerequisiteIds: true, opensAt: true, closesAt: true },
+    }),
+    db.lessonCompletion.findMany({
+      where: { userId: ctx.user.id, lesson: { courseId: lesson.courseId } },
+      select: { lessonId: true },
+    }),
+  ]);
+  const lockReason = getLessonLockReason({
+    lesson,
+    lessons: siblings,
+    completedLessonIds: new Set(completions.map((item) => item.lessonId)),
+    now: nowMs(),
+  });
+  if (lockReason) return;
 
   await db.lessonCompletion.upsert({
     where: { lessonId_userId: { lessonId, userId: ctx.user.id } },

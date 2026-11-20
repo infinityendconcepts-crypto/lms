@@ -5,10 +5,12 @@ import {
   ArrowRight,
   BookOpen,
   Calendar,
+  CalendarClock,
   Clock,
   Download,
   Eye,
   FileText,
+  Lock,
   Paperclip,
   Trash2,
   Video,
@@ -23,11 +25,19 @@ import { LessonContentFields } from "@/components/dashboard/LessonContentFields"
 import { LessonPreviewButton } from "@/components/dashboard/LessonPreviewButton";
 import { UploadField } from "@/components/UploadField";
 import { parseLessonBlocks } from "@/lib/lesson-blocks";
+import { parsePrerequisiteIds } from "@/lib/lesson-access";
 import { providerOptions } from "@/lib/ai/benchmark";
 import { formatBytes } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Lesson editor" };
+
+function toLocalInput(date: Date | null) {
+  if (!date) return "";
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60_000);
+  return local.toISOString().slice(0, 16);
+}
 
 export default async function LessonEditorPage({
   params,
@@ -70,6 +80,8 @@ export default async function LessonEditorPage({
       .filter((file) => file.kind === "video")
       .map((file) => ({ id: file.id, name: file.name })),
   });
+  const selectedPrerequisites = new Set(parsePrerequisiteIds(lesson.prerequisiteIds));
+  const siblingLessons = lesson.course.lessons.filter((item) => item.id !== lesson.id);
 
   return (
     <div>
@@ -205,6 +217,93 @@ export default async function LessonEditorPage({
                   detail: option.detail,
                 }))}
               />
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <div className="mb-3 flex items-start gap-2">
+                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                  <CalendarClock className="size-3.5" />
+                </span>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900">Availability</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Choose other lessons that must be finished first, and when this lesson opens.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <span className="label">Unlock after completing</span>
+                  {siblingLessons.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-[11px] text-slate-400">
+                      Add another lesson to this course before choosing prerequisites.
+                    </p>
+                  ) : (
+                    <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2">
+                      {siblingLessons.map((sibling) => (
+                        <label
+                          key={sibling.id}
+                          className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 transition hover:bg-white"
+                        >
+                          <input
+                            type="checkbox"
+                            name="prerequisiteIds"
+                            value={sibling.id}
+                            defaultChecked={selectedPrerequisites.has(sibling.id)}
+                            className="mt-0.5 size-4"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-semibold text-slate-700">
+                              {sibling.title}
+                            </span>
+                            <span className="block text-[10px] text-slate-400">
+                              {sibling.published ? "Published" : "Draft"} · Lesson{" "}
+                              {lesson.course.lessons.findIndex((item) => item.id === sibling.id) + 1}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-400">
+                    <Lock className="size-3" /> Learners must complete every selected lesson.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="label" htmlFor="lesson-opens-at">
+                      Opens on
+                    </label>
+                    <input
+                      id="lesson-opens-at"
+                      name="opensAt"
+                      type="datetime-local"
+                      defaultValue={toLocalInput(lesson.opensAt)}
+                      className="input"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      Leave empty to open when published.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="lesson-closes-at">
+                      Closes on <span className="font-normal text-slate-400">(optional)</span>
+                    </label>
+                    <input
+                      id="lesson-closes-at"
+                      name="closesAt"
+                      type="datetime-local"
+                      defaultValue={toLocalInput(lesson.closesAt)}
+                      className="input"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      Leave empty to keep it open indefinitely.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">

@@ -8,6 +8,7 @@ import {
   Download,
   FileText,
   GraduationCap,
+  Lock,
   Pencil,
 } from "lucide-react";
 import { db } from "@/lib/db";
@@ -16,8 +17,9 @@ import { markLessonCompleteAction } from "@/lib/actions/course";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LessonBlocks } from "@/components/LessonBlocks";
 import { parseLessonBlocks } from "@/lib/lesson-blocks";
+import { getLessonLockReason } from "@/lib/lesson-access";
 import { formatBytes } from "@/lib/storage";
-import { cn } from "@/lib/utils";
+import { cn, nowMs } from "@/lib/utils";
 
 export const metadata = { title: "Lesson" };
 
@@ -56,9 +58,58 @@ export default async function LearnLessonPage({
       );
   if (!enrolled) redirect(`/learn/${courseId}`);
 
-  const completion = await db.lessonCompletion.findUnique({
-    where: { lessonId_userId: { lessonId, userId: ctx.user.id } },
+  const completions: { lessonId: string }[] = teacher
+    ? []
+    : await db.lessonCompletion.findMany({
+        where: { userId: ctx.user.id, lesson: { courseId } },
+        select: { lessonId: true },
+      });
+  const completedLessonIds = new Set(completions.map((item) => item.lessonId));
+  const isCompleted = completedLessonIds.has(lessonId);
+  const lockReason = getLessonLockReason({
+    lesson,
+    lessons: lesson.course.lessons,
+    completedLessonIds,
+    now: nowMs(),
+    teacher,
   });
+
+  if (lockReason) {
+    return (
+      <div className="min-h-screen bg-canvas">
+        <header className="border-b border-slate-200 bg-white">
+          <div className="mx-auto flex h-14 max-w-3xl items-center px-4 sm:px-6">
+            <Link
+              href={`/learn/${courseId}`}
+              className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900"
+            >
+              <ArrowLeft className="size-4 shrink-0" />
+              <span className="truncate">{lesson.course.title}</span>
+            </Link>
+          </div>
+        </header>
+        <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+          <div className="card-pad mx-auto max-w-xl text-center">
+            <span className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+              <Lock className="size-5" />
+            </span>
+            <p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-amber-600">
+              Locked lesson
+            </p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{lesson.title}</h1>
+            <p className="mt-2 text-sm text-slate-500">This lesson is not available yet.</p>
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              {lockReason}
+            </div>
+            <Link href={`/learn/${courseId}`} className="btn-secondary btn-sm mt-5">
+              Back to course
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const blocks = parseLessonBlocks(lesson.contentBlocks, {
     content: lesson.content,
     meetingUrl: lesson.meetingUrl,
@@ -101,7 +152,7 @@ export default async function LearnLessonPage({
           <span className="badge bg-brand-50 text-brand-700">
             Lesson {index + 1} of {lesson.course.lessons.length}
           </span>
-          {completion && (
+          {isCompleted && (
             <span className="badge bg-emerald-50 text-emerald-700">
               <CheckCircle2 className="mr-1 size-3" /> Completed
             </span>
@@ -192,7 +243,7 @@ export default async function LearnLessonPage({
                 <GraduationCap className="size-3.5" /> Manage
               </Link>
             </div>
-          ) : completion ? (
+          ) : isCompleted ? (
             <div className="flex flex-col items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-6 text-center">
               <CheckCircle2 className="size-7 text-emerald-500" />
               <p className="text-sm font-semibold text-emerald-900">Lesson complete — nice work.</p>

@@ -295,6 +295,9 @@ model Lesson {
   estimatedMinutes Int      @default(15)
   order            Int      @default(0)
   published        Boolean  @default(false)
+  prerequisiteIds  String   @default("[]")
+  opensAt          DateTime?
+  closesAt         DateTime?
   meetingUrl       String?
   codePadId        String?
   createdAt        DateTime @default(now())

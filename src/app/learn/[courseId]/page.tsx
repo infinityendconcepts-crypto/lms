@@ -21,7 +21,8 @@ import { enrollSelfAction } from "@/lib/actions/course";
 import { Avatar, Badge, Progress } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { MathText } from "@/components/MathText";
-import { formatDate, pct } from "@/lib/utils";
+import { getLessonLockReason } from "@/lib/lesson-access";
+import { formatDate, nowMs, pct } from "@/lib/utils";
 
 export const metadata = { title: "Learn" };
 
@@ -60,6 +61,11 @@ export default async function LearnCoursePage({
   });
   if (!course) notFound();
 
+  const allLessons = await db.lesson.findMany({
+    where: { courseId, course: { tenantId: ctx.tenant.id } },
+    orderBy: { order: "asc" },
+    select: { id: true, title: true, prerequisiteIds: true, opensAt: true, closesAt: true },
+  });
   const enrollment = await db.enrollment.findUnique({
     where: { courseId_userId: { courseId, userId: ctx.user.id } },
   });
@@ -72,6 +78,7 @@ export default async function LearnCoursePage({
       })
     : [];
   const completed = new Set(completions.map((c) => c.lessonId));
+  const now = nowMs();
 
   const attempts = await db.attempt.findMany({
     where: { assessment: { courseId }, studentId: ctx.user.id },
@@ -205,13 +212,22 @@ export default async function LearnCoursePage({
               <ol className="space-y-2">
                 {course.lessons.map((lesson, index) => {
                   const done = completed.has(lesson.id);
+                  const lockReason = getLessonLockReason({
+                    lesson,
+                    lessons: allLessons,
+                    completedLessonIds: completed,
+                    now,
+                    teacher,
+                  });
+                  const accessReason = !enrolled ? "Enroll to open this lesson" : lockReason;
+                  const canOpen = enrolled && !lockReason;
                   return (
                     <li key={lesson.id}>
                       <Link
-                        href={enrolled ? `/learn/${course.id}/lessons/${lesson.id}` : "#"}
-                        aria-disabled={!enrolled}
+                        href={canOpen ? `/learn/${course.id}/lessons/${lesson.id}` : "#"}
+                        aria-disabled={!canOpen}
                         className={`group flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 transition ${
-                          enrolled
+                          canOpen
                             ? "border-slate-200 hover:border-brand-300 hover:shadow-sm"
                             : "cursor-not-allowed border-slate-200 opacity-60"
                         }`}
@@ -229,11 +245,16 @@ export default async function LearnCoursePage({
                             {lesson.stage ? `${lesson.stage.title} · ` : ""}
                             {lesson.summary || (lesson.published ? "Lesson" : "Draft")}
                           </p>
+                          {accessReason && (
+                            <p className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-amber-600">
+                              <Lock className="size-3" /> {accessReason}
+                            </p>
+                          )}
                         </div>
                         <span className="flex shrink-0 items-center gap-1 text-[10px] text-slate-400">
                           <Clock className="size-3" /> {lesson.estimatedMinutes} min
                         </span>
-                        {enrolled ? (
+                        {canOpen ? (
                           <ArrowRight className="size-4 shrink-0 text-slate-300 group-hover:text-brand-500" />
                         ) : (
                           <Lock className="size-3.5 shrink-0 text-slate-300" />
