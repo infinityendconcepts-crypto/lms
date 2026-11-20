@@ -146,7 +146,7 @@ function ControlledMathEditor({
             onChange={(e) => onChange(e.target.value)}
             rows={rows}
             placeholder={placeholder}
-            className="textarea font-mono text-[12px]"
+            className="textarea text-sm"
           />
         </>
       )}

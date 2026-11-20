@@ -119,18 +119,31 @@ export function formatSelection(
 const FORMAT_BUTTONS: {
   action: FormatAction;
   label: string;
+  short: string;
   title: string;
   icon: typeof Bold;
 }[] = [
-  { action: "bold", label: "Bold", title: "Bold (**text**)", icon: Bold },
-  { action: "italic", label: "Italic", title: "Italic (*text*)", icon: Italic },
-  { action: "heading", label: "Heading", title: "Heading (## text)", icon: Heading2 },
-  { action: "bullet", label: "Bulleted list", title: "Bulleted list (- item)", icon: List },
-  { action: "number", label: "Numbered list", title: "Numbered list (1. item)", icon: ListOrdered },
-  { action: "quote", label: "Quote", title: "Quote (> text)", icon: Quote },
-  { action: "link", label: "Link", title: "Link ([text](url))", icon: Link2 },
-  { action: "code", label: "Inline code", title: "Inline code (`code`)", icon: Code2 },
-  { action: "codeblock", label: "Code block", title: "Code block (```code```)", icon: Code2 },
+  { action: "bold", label: "Bold", short: "B", title: "Bold (**text**)", icon: Bold },
+  { action: "italic", label: "Italic", short: "I", title: "Italic (*text*)", icon: Italic },
+  { action: "heading", label: "Heading", short: "H2", title: "Heading (## text)", icon: Heading2 },
+  { action: "bullet", label: "Bulleted list", short: "List", title: "Bulleted list (- item)", icon: List },
+  {
+    action: "number",
+    label: "Numbered list",
+    short: "1.",
+    title: "Numbered list (1. item)",
+    icon: ListOrdered,
+  },
+  { action: "quote", label: "Quote", short: "Quote", title: "Quote (> text)", icon: Quote },
+  { action: "link", label: "Link", short: "Link", title: "Link ([text](url))", icon: Link2 },
+  { action: "code", label: "Inline code", short: "</>", title: "Inline code (`code`)", icon: Code2 },
+  {
+    action: "codeblock",
+    label: "Code block",
+    short: "```",
+    title: "Code block (```code```)",
+    icon: Code2,
+  },
 ];
 
 export function TextFormatToolbar({
@@ -141,8 +154,8 @@ export function TextFormatToolbar({
   compact?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      {FORMAT_BUTTONS.map(({ action, label, title, icon: Icon }) => (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {FORMAT_BUTTONS.map(({ action, label, short, title, icon: Icon }) => (
         <button
           key={action}
           type="button"
@@ -150,11 +163,12 @@ export function TextFormatToolbar({
           title={title}
           aria-label={label}
           className={cn(
-            "inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700",
-            compact ? "size-6" : "size-7"
+            "inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white font-semibold text-slate-700 shadow-sm transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-brand-500",
+            compact ? "px-2 text-[10px]" : "px-2.5 text-xs"
           )}
         >
-          <Icon className={compact ? "size-3" : "size-3.5"} />
+          <Icon className="size-3.5 shrink-0" />
+          <span>{short}</span>
         </button>
       ))}
     </div>
@@ -335,7 +349,7 @@ export function RichTextEditor({
             placeholder={placeholder}
             rows={rows}
             required={required}
-            className="textarea font-mono text-[13px]"
+            className="textarea text-sm"
           />
         </>
       ) : (
