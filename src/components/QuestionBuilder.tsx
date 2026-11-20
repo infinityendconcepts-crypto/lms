@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Eye, Pencil, Plus, Sigma, Sparkles, Trash2 } from "lucide-react";
+import { Eye, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { saveQuestionAction } from "@/lib/actions/assessment";
 import {
   emptyData,
@@ -18,8 +18,8 @@ import { MathText } from "@/components/MathText";
 import { UploadField } from "@/components/UploadField";
 import { SubmitButton } from "@/components/SubmitButton";
 import {
+  EditorToolbar,
   MathToolbar,
-  TextFormatToolbar,
   formatSelection,
   type FormatAction,
 } from "@/components/RichTextEditor";
@@ -117,28 +117,14 @@ function ControlledMathEditor({
         </div>
       ) : (
         <>
-          <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50/70 p-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <TextFormatToolbar onFormat={applyFormat} compact />
-              <button
-                type="button"
-                onClick={() => setMathEnabled((enabled) => !enabled)}
-                aria-pressed={mathEnabled}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold transition",
-                  mathEnabled
-                    ? "border-brand-300 bg-brand-50 text-brand-700"
-                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                )}
-              >
-                <Sigma className="size-3" /> Math
-              </button>
-            </div>
-            {mathEnabled && (
-              <div className="mt-1.5 border-t border-slate-200 pt-1.5">
-                <MathToolbar onInsert={insert} compact />
-              </div>
-            )}
+          <div className="mb-1.5 overflow-hidden rounded-lg border border-slate-200">
+            <EditorToolbar
+              onFormat={applyFormat}
+              mathEnabled={mathEnabled}
+              onMathToggle={() => setMathEnabled((enabled) => !enabled)}
+              compact
+            />
+            {mathEnabled && <MathToolbar onInsert={insert} compact />}
           </div>
           <textarea
             ref={ref}
