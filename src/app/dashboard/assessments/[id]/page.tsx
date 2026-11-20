@@ -52,11 +52,12 @@ function answerKey(type: string, data: string) {
   switch (type) {
     case "MULTIPLE_CHOICE":
     case "IMAGE_BASED": {
-      const options = (d.options ?? []) as { id: string; text: string }[];
+      const options = (d.options ?? []) as { id: string; text: string; imageUrl?: string }[];
       const correct = (d.correct ?? []) as string[];
       const labels = options
-        .filter((o) => correct.includes(o.id))
-        .map((o, i) => `${String.fromCharCode(65 + i)}. ${o.text || "(empty)"}`);
+        .map((o, i) => ({ o, label: String.fromCharCode(65 + i) }))
+        .filter(({ o }) => correct.includes(o.id))
+        .map(({ o, label }) => `${label}. ${o.text?.trim() || (o.imageUrl ? "Image option" : "(empty)")}`);
       return labels.length ? labels.join("  ·  ") : "No correct option set";
     }
     case "YES_NO":

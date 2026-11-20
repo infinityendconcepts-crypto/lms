@@ -27,13 +27,73 @@ function ChoiceReview({
   data,
   selected,
   showKey,
+  imageMode = false,
 }: {
   data: { options?: Option[]; correct?: string[]; multiple?: boolean };
   selected: string[];
   showKey: boolean;
+  imageMode?: boolean;
 }) {
   const options = data.options ?? [];
   const correct = data.correct ?? [];
+  if (imageMode) {
+    return (
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {options.map((option, index) => {
+          const isSelected = selected.includes(option.id);
+          const isCorrect = correct.includes(option.id);
+          const tone = showKey
+            ? isCorrect
+              ? "border-emerald-300 ring-2 ring-emerald-200"
+              : isSelected
+                ? "border-rose-300 ring-2 ring-rose-200"
+                : "border-slate-200"
+            : isSelected
+              ? "border-brand-300 ring-2 ring-brand-200"
+              : "border-slate-200";
+          return (
+            <div key={option.id} className={cn("overflow-hidden rounded-2xl border bg-white", tone)}>
+              <div className="relative">
+                <span
+                  className={cn(
+                    "absolute left-2 top-2 z-10 flex size-6 items-center justify-center rounded-full text-[10px] font-bold shadow-sm",
+                    isSelected || (showKey && isCorrect)
+                      ? "bg-brand-600 text-white"
+                      : "bg-white/90 text-slate-600 ring-1 ring-slate-200"
+                  )}
+                >
+                  {showKey && isCorrect ? <Check className="size-3.5" /> : showKey && isSelected && !isCorrect ? <X className="size-3.5" /> : letter(index)}
+                </span>
+                {option.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={option.imageUrl}
+                    alt={option.text || `Option ${letter(index)}`}
+                    className="aspect-[4/3] w-full bg-slate-100 object-contain"
+                  />
+                ) : (
+                  <div className="flex aspect-[4/3] w-full items-center justify-center bg-slate-100 px-4 text-center text-xs text-slate-400">
+                    No image
+                  </div>
+                )}
+              </div>
+              {(option.text || isSelected || (showKey && isCorrect)) && (
+                <div className="flex items-start justify-between gap-2 border-t border-slate-100 px-3 py-2 text-sm">
+                  <span className="min-w-0 flex-1 text-slate-700">
+                    {option.text ? <MathText content={option.text} inline /> : <span className="text-slate-400">Option {letter(index)}</span>}
+                  </span>
+                  <span className="shrink-0 space-x-1 text-[10px] font-semibold">
+                    {isSelected && <span className="text-brand-700">chosen</span>}
+                    {showKey && isCorrect && <span className="text-emerald-700">correct</span>}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <ul className="mt-3 space-y-1.5">
       {options.map((option, index) => {
@@ -105,6 +165,7 @@ export function QuestionReview({
             data={data as { options?: Option[]; correct?: string[]; multiple?: boolean }}
             selected={(response.selected as string[]) ?? []}
             showKey={showKey}
+            imageMode={type === "IMAGE_BASED"}
           />
         );
       case "YES_NO": {
@@ -235,15 +296,21 @@ export function QuestionReview({
                 {left.map((item) => {
                   const picked = submitted[item.id];
                   const correct = pairs[item.id];
-                  const pickedText = right.find((r) => r.id === picked)?.text ?? "—";
-                  const correctText = right.find((r) => r.id === correct)?.text ?? "—";
+                  const pickedText = right.find((r) => r.id === picked)?.text ?? "";
+                  const correctText = right.find((r) => r.id === correct)?.text ?? "";
                   return (
-                    <tr key={item.id} className="border-t border-slate-100">
-                      <td className="px-3 py-2 text-slate-700">{item.text}</td>
-                      <td className={cn("px-3 py-2 font-medium", picked === correct ? "text-emerald-700" : "text-slate-700")}>
-                        {pickedText}
+                    <tr key={item.id} className="border-t border-slate-100 align-top">
+                      <td className="px-3 py-2 text-slate-700">
+                        <MathText content={item.text} inline />
                       </td>
-                      {showKey && <td className="px-3 py-2 text-slate-500">{correctText}</td>}
+                      <td className={cn("px-3 py-2 font-medium", picked === correct ? "text-emerald-700" : "text-slate-700")}>
+                        {pickedText ? <MathText content={pickedText} inline /> : "—"}
+                      </td>
+                      {showKey && (
+                        <td className="px-3 py-2 text-slate-500">
+                          {correctText ? <MathText content={correctText} inline /> : "—"}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

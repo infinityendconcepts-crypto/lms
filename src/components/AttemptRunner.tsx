@@ -46,11 +46,6 @@ const MATH_SNIPPETS = [
   { label: "±", value: "\\pm" },
 ];
 
-/** Native <option> cannot render KaTeX, so show a readable plain label. */
-function plainMath(text: string) {
-  return text.replace(/\$/g, "").replace(/\\[a-zA-Z]+/g, (cmd) => cmd.slice(1));
-}
-
 function answered(question: RunnerQuestion, response: Record<string, unknown> | undefined) {
   if (!response) return false;
   if (question.type === "CASE_STUDY") {
@@ -469,6 +464,58 @@ function AnswerInput({
           onChange({ selected: [id] });
         }
       }
+      if (type === "IMAGE_BASED") {
+        return (
+          <div>
+            {multiple && <p className="mb-2 text-[10px] font-semibold text-brand-600">Select all that apply</p>}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {options.map((option, index) => {
+                const picked = selected.includes(option.id);
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => toggle(option.id)}
+                    className={cn(
+                      "group relative overflow-hidden rounded-2xl border text-left transition",
+                      picked
+                        ? "border-brand-400 bg-brand-50/40 ring-2 ring-brand-500/20"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute left-2.5 top-2.5 z-10 flex size-6 items-center justify-center text-[10px] font-bold shadow-sm",
+                        multiple ? "rounded-md" : "rounded-full",
+                        picked ? "bg-brand-600 text-white" : "bg-white/90 text-slate-600 ring-1 ring-slate-200"
+                      )}
+                    >
+                      {picked ? <Check className="size-3.5" /> : String.fromCharCode(65 + index)}
+                    </span>
+                    {option.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={option.imageUrl}
+                        alt={option.text || `Option ${String.fromCharCode(65 + index)}`}
+                        className="aspect-[4/3] w-full bg-slate-100 object-contain"
+                      />
+                    ) : (
+                      <div className="flex aspect-[4/3] w-full items-center justify-center bg-slate-100 px-4 text-center text-xs text-slate-400">
+                        No image uploaded
+                      </div>
+                    )}
+                    {option.text ? (
+                      <span className="block border-t border-slate-100 px-3 py-2 text-sm text-slate-700">
+                        <MathText content={option.text} inline />
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="space-y-2">
           {multiple && <p className="text-[10px] font-semibold text-brand-600">Select all that apply</p>}
@@ -608,27 +655,12 @@ function AnswerInput({
       const right = (data.right ?? []) as { id: string; text: string }[];
       const pairs = (response.pairs as Record<string, string>) ?? {};
       return (
-        <div className="space-y-2">
-          {left.map((item) => (
-            <div key={item.id} className="grid items-center gap-2 sm:grid-cols-[1fr_1fr]">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                <MathText content={item.text} inline />
-              </div>
-              <select
-                value={pairs[item.id] ?? ""}
-                onChange={(e) => onChange({ pairs: { ...pairs, [item.id]: e.target.value } })}
-                className="select"
-              >
-                <option value="">Choose a match…</option>
-                {right.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {plainMath(option.text)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
-        </div>
+        <MatchingAnswer
+          left={left}
+          right={right}
+          pairs={pairs}
+          onChange={(next) => onChange({ pairs: next })}
+        />
       );
     }
     case "OPEN_ENDED": {
@@ -670,6 +702,134 @@ function AnswerInput({
         </p>
       );
   }
+}
+
+
+function MatchingAnswer({
+  left,
+  right,
+  pairs,
+  onChange,
+}: {
+  left: { id: string; text: string }[];
+  right: { id: string; text: string }[];
+  pairs: Record<string, string>;
+  onChange: (pairs: Record<string, string>) => void;
+}) {
+  const [over, setOver] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+
+  function setPair(leftId: string, rightId: string) {
+    if (!rightId) return;
+    onChange({ ...pairs, [leftId]: rightId });
+  }
+
+  function clearPair(leftId: string) {
+    const next = { ...pairs };
+    delete next[leftId];
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[10px] font-semibold text-slate-500">
+        Drag a match from the bank onto each item, or drop a different match to replace it.
+      </p>
+      <div className="space-y-2">
+        {left.map((item) => {
+          const matchedId = pairs[item.id];
+          const matched = right.find((r) => r.id === matchedId);
+          const active = over === item.id;
+          return (
+            <div key={item.id} className="grid items-stretch gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+                <MathText content={item.text} inline />
+              </div>
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (over !== item.id) setOver(item.id);
+                }}
+                onDragLeave={() => setOver((current) => (current === item.id ? null : current))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const rightId = e.dataTransfer.getData("text/plain");
+                  setOver(null);
+                  setDragging(null);
+                  if (rightId) setPair(item.id, rightId);
+                }}
+                className={cn(
+                  "flex min-h-[44px] items-center justify-between gap-2 rounded-xl border-2 border-dashed px-3 py-2 text-sm transition",
+                  active
+                    ? "border-brand-400 bg-brand-50/70"
+                    : matched
+                      ? "border-emerald-300 bg-emerald-50/50"
+                      : "border-slate-200 bg-white"
+                )}
+              >
+                {matched ? (
+                  <>
+                    <span className="min-w-0 flex-1 text-slate-800">
+                      <MathText content={matched.text} inline />
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => clearPair(item.id)}
+                      className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold text-slate-400 hover:bg-white hover:text-rose-600"
+                      title="Remove match"
+                    >
+                      Clear
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-slate-400">Drop a match here…</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div>
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Match bank</p>
+        <div className="flex flex-wrap gap-2">
+          {right.map((option) => {
+            const assignedTo = Object.entries(pairs).find(([, rid]) => rid === option.id)?.[0];
+            const assignedLabel = assignedTo ? left.findIndex((l) => l.id === assignedTo) : -1;
+            return (
+              <div
+                key={option.id}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/plain", option.id);
+                  e.dataTransfer.effectAllowed = "move";
+                  setDragging(option.id);
+                }}
+                onDragEnd={() => {
+                  setDragging(null);
+                  setOver(null);
+                }}
+                className={cn(
+                  "cursor-grab select-none rounded-xl border px-3 py-2 text-sm shadow-sm transition active:cursor-grabbing",
+                  dragging === option.id
+                    ? "border-brand-400 bg-brand-50 opacity-60"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50/40"
+                )}
+                title="Drag onto a matching item"
+              >
+                <MathText content={option.text} inline />
+                {assignedLabel >= 0 && (
+                  <span className="ml-2 inline-flex size-4 items-center justify-center rounded-full bg-emerald-100 text-[9px] font-bold text-emerald-700 align-middle">
+                    {assignedLabel + 1}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CaseStudyQuestion({

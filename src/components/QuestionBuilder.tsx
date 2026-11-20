@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Eye, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { saveQuestionAction } from "@/lib/actions/assessment";
 import {
   emptyData,
@@ -17,12 +17,7 @@ import {
 import { MathText } from "@/components/MathText";
 import { UploadField } from "@/components/UploadField";
 import { SubmitButton } from "@/components/SubmitButton";
-import {
-  EditorToolbar,
-  MathToolbar,
-  formatSelection,
-  type FormatAction,
-} from "@/components/RichTextEditor";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import { cn } from "@/lib/utils";
 
 type Dict = QuestionDataShape;
@@ -39,114 +34,15 @@ export type BuilderQuestion = {
   explanation: string | null;
 };
 
-function ControlledMathEditor({
-  label,
-  value,
-  onChange,
-  rows = 4,
-  placeholder,
-  hint,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  rows?: number;
-  placeholder?: string;
-  hint?: string;
-}) {
-  const [preview, setPreview] = useState(false);
-  const [mathEnabled, setMathEnabled] = useState(false);
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  function focusSelection(selectionStart: number, selectionEnd: number) {
-    requestAnimationFrame(() => {
-      const el = ref.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(selectionStart, selectionEnd);
-    });
-  }
-
-  function applyFormat(action: FormatAction) {
-    const el = ref.current;
-    if (!el) return;
-    const start = el.selectionStart ?? value.length;
-    const end = el.selectionEnd ?? value.length;
-    const result = formatSelection(value, start, end, action);
-    onChange(result.next);
-    focusSelection(result.selectionStart, result.selectionEnd);
-  }
-
-  function insert(snippet: string) {
-    const el = ref.current;
-    if (!el) {
-      onChange(value + snippet);
-      return;
-    }
-    const start = el.selectionStart ?? value.length;
-    const end = el.selectionEnd ?? value.length;
-    const next = value.slice(0, start) + snippet + value.slice(end);
-    onChange(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      const caret = start + snippet.length;
-      el.setSelectionRange(caret, caret);
-    });
-  }
-
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="label mb-0">{label}</span>
-        <button
-          type="button"
-          onClick={() => setPreview((p) => !p)}
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-100"
-        >
-          {preview ? <Pencil className="size-3" /> : <Eye className="size-3" />}
-          {preview ? "Edit" : "Preview"}
-        </button>
-      </div>
-      {preview ? (
-        <div className="min-h-16 rounded-xl border border-slate-200 bg-white p-3">
-          {value.trim() ? (
-            <MathText content={value} />
-          ) : (
-            <p className="text-xs text-slate-400">Nothing to preview.</p>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="mb-1.5 overflow-hidden rounded-lg border border-slate-200">
-            <EditorToolbar
-              onFormat={applyFormat}
-              mathEnabled={mathEnabled}
-              onMathToggle={() => setMathEnabled((enabled) => !enabled)}
-              compact
-            />
-            {mathEnabled && <MathToolbar onInsert={insert} compact />}
-          </div>
-          <textarea
-            ref={ref}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            rows={rows}
-            placeholder={placeholder}
-            className="textarea text-sm"
-          />
-        </>
-      )}
-      {hint && <p className="mt-1 text-[10px] text-slate-400">{hint}</p>}
-    </div>
-  );
-}
-
 function OptionRow({
   option,
   index,
   checked,
   multiple,
+  imageMode,
+  courseId,
   onText,
+  onImage,
   onToggle,
   onRemove,
 }: {
@@ -154,46 +50,75 @@ function OptionRow({
   index: number;
   checked: boolean;
   multiple: boolean;
+  imageMode?: boolean;
+  courseId?: string;
   onText: (v: string) => void;
+  onImage?: (url: string) => void;
   onToggle: () => void;
   onRemove?: () => void;
 }) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-xl border px-2.5 py-2",
+        "rounded-xl border px-2.5 py-2",
         checked ? "border-emerald-300 bg-emerald-50/60" : "border-slate-200 bg-white"
       )}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        className={cn(
-          "flex size-4 shrink-0 items-center justify-center border text-[9px] font-bold",
-          multiple ? "rounded-[4px]" : "rounded-full",
-          checked
-            ? "border-emerald-600 bg-emerald-600 text-white"
-            : "border-slate-300 bg-white text-transparent"
-        )}
-        title={checked ? "Correct answer" : "Mark correct"}
-      >
-        ✓
-      </button>
-      <span className="text-[10px] font-bold text-slate-400">{String.fromCharCode(65 + index)}</span>
-      <input
-        value={option.text}
-        onChange={(e) => onText(e.target.value)}
-        placeholder="Option text, LaTeX allowed"
-        className="flex-1 border-0 bg-transparent p-0 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
-      />
-      {onRemove && (
+      <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={onRemove}
-          className="rounded p-1 text-slate-300 hover:bg-rose-50 hover:text-rose-600"
+          onClick={onToggle}
+          className={cn(
+            "flex size-4 shrink-0 items-center justify-center border text-[9px] font-bold",
+            multiple ? "rounded-[4px]" : "rounded-full",
+            checked
+              ? "border-emerald-600 bg-emerald-600 text-white"
+              : "border-slate-300 bg-white text-transparent"
+          )}
+          title={checked ? "Correct answer" : "Mark correct"}
         >
-          <Trash2 className="size-3" />
+          ✓
         </button>
+        <span className="text-[10px] font-bold text-slate-400">{String.fromCharCode(65 + index)}</span>
+        {!imageMode && (
+          <input
+            value={option.text}
+            onChange={(e) => onText(e.target.value)}
+            placeholder="Option text, LaTeX allowed"
+            className="flex-1 border-0 bg-transparent p-0 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
+          />
+        )}
+        {imageMode && (
+          <span className="flex-1 text-[11px] font-medium text-slate-500">Image option</span>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded p-1 text-slate-300 hover:bg-rose-50 hover:text-rose-600"
+          >
+            <Trash2 className="size-3" />
+          </button>
+        )}
+      </div>
+      {imageMode && (
+        <div className="mt-2 space-y-2 pl-6">
+          <UploadField
+            label="Option image"
+            defaultUrl={option.imageUrl ?? ""}
+            accept="image/*"
+            courseId={courseId}
+            onUploaded={(f) => onImage?.(f.url)}
+            compact
+            hint="Upload the image learners will choose from."
+          />
+          <input
+            value={option.text}
+            onChange={(e) => onText(e.target.value)}
+            placeholder="Caption or alt text (optional)"
+            className="input py-1.5 text-xs"
+          />
+        </div>
       )}
     </div>
   );
@@ -289,6 +214,10 @@ export function QuestionBuilder({
     patch({ options: options.map((o) => (o.id === id ? { ...o, text } : o)) });
   }
 
+  function updateOptionImage(id: string, imageUrl: string) {
+    patch({ options: options.map((o) => (o.id === id ? { ...o, imageUrl } : o)) });
+  }
+
   function removeOption(id: string) {
     patch({
       options: options.filter((o) => o.id !== id),
@@ -310,9 +239,7 @@ export function QuestionBuilder({
       <input type="hidden" name="questionId" value={initial?.id ?? ""} />
       <input type="hidden" name="assessmentId" value={assessmentId ?? ""} />
       <input type="hidden" name="type" value={type} />
-      <input type="hidden" name="prompt" value={prompt} />
       <input type="hidden" name="data" value={JSON.stringify(data)} />
-      <input type="hidden" name="explanation" value={explanation} />
       <input type="hidden" name="points" value={effectivePoints} />
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -366,7 +293,8 @@ export function QuestionBuilder({
         </div>
       </div>
 
-      <ControlledMathEditor
+      <RichTextEditor
+        name="prompt"
         label={type === "CASE_STUDY" ? "Case prompt" : "Question"}
         value={prompt}
         onChange={setPrompt}
@@ -374,7 +302,7 @@ export function QuestionBuilder({
         placeholder={
           type === "CASE_STUDY"
             ? "A short prompt introducing the scenario…"
-            : "Ask your question. Inline math: $x^2$ · display: $$\\int_0^1 x dx$$"
+            : "Ask your question. Use the toolbar for formatting and math like in lessons."
         }
       />
 
@@ -407,7 +335,9 @@ export function QuestionBuilder({
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] font-semibold text-slate-600">
-                Options · click the circle/square to mark correct
+                {type === "IMAGE_BASED"
+                  ? "Image options · upload an image for each choice and mark the correct one"
+                  : "Options · click the circle/square to mark correct"}
               </p>
               <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
                 <input
@@ -431,7 +361,10 @@ export function QuestionBuilder({
                   index={i}
                   checked={correct.includes(o.id)}
                   multiple={multiple}
+                  imageMode={type === "IMAGE_BASED"}
+                  courseId={courseId}
                   onText={(v) => updateOption(o.id, v)}
+                  onImage={(url) => updateOptionImage(o.id, url)}
                   onToggle={() => toggleCorrect(o.id)}
                   onRemove={options.length > 2 ? () => removeOption(o.id) : undefined}
                 />
@@ -817,15 +750,14 @@ export function QuestionBuilder({
                 ))}
               </div>
             </div>
-            <div>
-              <span className="label">Sample answer (optional, shown after grading)</span>
-              <textarea
-                value={d.sampleAnswer ?? ""}
-                onChange={(e) => patch({ sampleAnswer: e.target.value })}
-                rows={2}
-                className="textarea text-xs"
-              />
-            </div>
+            <RichTextEditor
+              name="sample-answer"
+              label="Sample answer (optional, shown after grading)"
+              value={String(d.sampleAnswer ?? "")}
+              onChange={(v) => patch({ sampleAnswer: v })}
+              rows={2}
+              placeholder="Optional model answer shown after grading."
+            />
             <p className="text-[10px] text-slate-400">
               Open answers go to the manual grading queue. Rubric points are guidance for the grader.
             </p>
@@ -834,12 +766,13 @@ export function QuestionBuilder({
 
         {type === "CASE_STUDY" && (
           <div className="space-y-3">
-            <ControlledMathEditor
+            <RichTextEditor
+              name="case-passage"
               label="Scenario / passage"
-              value={d.passage ?? ""}
+              value={String(d.passage ?? "")}
               onChange={(v) => patch({ passage: v })}
               rows={6}
-              placeholder="Write the case study context. Tables, lists and LaTeX are supported."
+              placeholder="Write the case study context with the same formatting tools used in lessons."
             />
             <div>
               <div className="mb-1.5 flex items-end justify-between">
@@ -927,19 +860,22 @@ export function QuestionBuilder({
                         <Trash2 className="size-3" />
                       </button>
                     </div>
-                    <textarea
-                      value={sub.prompt}
-                      onChange={(e) =>
-                        patch({
-                          subQuestions: subQuestions.map((x) =>
-                            x.id === sub.id ? { ...x, prompt: e.target.value } : x
-                          ),
-                        })
-                      }
-                      rows={2}
-                      placeholder="Sub-question prompt (LaTeX supported)"
-                      className="textarea mb-2 text-xs"
-                    />
+                    <div className="mb-2">
+                      <RichTextEditor
+                        name={`sub-prompt-${sub.id}`}
+                        label="Sub-question prompt"
+                        value={sub.prompt}
+                        onChange={(v) =>
+                          patch({
+                            subQuestions: subQuestions.map((x) =>
+                              x.id === sub.id ? { ...x, prompt: v } : x
+                            ),
+                          })
+                        }
+                        rows={2}
+                        placeholder="Sub-question prompt with the same formatting tools used in lessons."
+                      />
+                    </div>
                     <SubQuestionData
                       sub={sub}
                       onChange={(next) =>
@@ -961,12 +897,13 @@ export function QuestionBuilder({
         )}
       </div>
 
-      <ControlledMathEditor
+      <RichTextEditor
+        name="explanation"
         label="Explanation / worked solution (optional)"
         value={explanation}
         onChange={setExplanation}
         rows={3}
-        placeholder="Shown to learners after grading. LaTeX supported."
+        placeholder="Shown to learners after grading. Uses the same formatting tools as lessons."
       />
 
       <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
