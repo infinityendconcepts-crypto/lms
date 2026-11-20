@@ -144,12 +144,22 @@ export default async function LandingPage({
           </div>
 
           <div className="relative mx-auto w-full max-w-[470px] lg:mx-0">
-            <div className="absolute -top-5 -right-3 z-10 hidden rotate-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg sm:block">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-x-6 -inset-y-8 -z-10 overflow-hidden rounded-[2rem]"
+            >
+              <div
+                className="absolute inset-0 bg-cover bg-center opacity-35"
+                style={{ backgroundImage: "url('/hero-background.jpg')" }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-br from-white/70 via-white/30 to-brand-100/40" />
+            </div>
+            <div className="absolute -top-5 -right-3 z-20 hidden rotate-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg sm:block">
               <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                 <Layers className="size-3 text-brand-600" /> 9 question types
               </p>
             </div>
-            <div className="absolute -bottom-5 -left-4 z-10 hidden -rotate-2 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg sm:flex">
+            <div className="absolute -bottom-5 -left-4 z-20 hidden -rotate-2 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg sm:flex">
               <span className="flex size-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                 <Zap className="size-3.5" />
               </span>
@@ -159,7 +169,7 @@ export default async function LandingPage({
               </div>
             </div>
 
-            <div className="card overflow-hidden">
+            <div className="card relative z-10 overflow-hidden shadow-xl">
               <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="flex size-6 items-center justify-center rounded-md bg-brand-600 text-[10px] font-bold text-white">
