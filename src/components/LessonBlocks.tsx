@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { MathText } from "@/components/MathText";
+import { UploadedVideoPlayer } from "@/components/VideoPlayer";
 import { parseVideoEmbed } from "@/lib/video-link";
 import { cn } from "@/lib/utils";
 import { LESSON_BLOCK_LABELS, type LessonBlock } from "@/lib/lesson-blocks";
@@ -86,20 +87,7 @@ function VideoBody({ block }: { block: Extract<LessonBlock, { type: "video" }> }
           </div>
         </div>
       ) : block.source === "upload" && block.url ? (
-        <div className="overflow-hidden rounded-2xl bg-slate-900 shadow-lg ring-1 ring-slate-900/10">
-          <video
-            src={block.url}
-            controls
-            preload="metadata"
-            playsInline
-            className="aspect-video w-full bg-black"
-          >
-            Your browser does not support embedded video.
-            <a href={block.url} className="text-brand-300 underline">
-              Download the video
-            </a>
-          </video>
-        </div>
+        <UploadedVideoPlayer key={`${block.id}-${block.url}`} src={block.url} title={block.title} />
       ) : block.url ? (
         <a
           href={block.url}
