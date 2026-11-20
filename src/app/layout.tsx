@@ -17,12 +17,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Nkanyezi LMS — the math-native LMS you can rent",
+    default: "Nkanyezi LMS — a flexible multi-tenant LMS for every subject",
     template: "%s · Nkanyezi LMS",
   },
   description:
-    "A multi-tenant learning platform for schools, tutoring groups and independent teachers. LaTeX math everywhere, nine modern question types, auto-grading and secure course documents.",
-  keywords: ["LMS", "learning management system", "math", "LaTeX", "multi-tenant", "SaaS"],
+    "A multi-tenant learning platform for schools, tutoring groups and independent teachers. Courses, lessons, assessments, grading, analytics and secure materials — with rich content support including math and LaTeX.",
+  keywords: ["LMS", "learning management system", "courses", "assessments", "grading", "multi-tenant", "SaaS", "math", "LaTeX"],
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

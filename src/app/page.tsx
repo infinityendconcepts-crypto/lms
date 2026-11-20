@@ -69,8 +69,8 @@ export default async function LandingPage({
             <a href="#questions" className="transition hover:text-slate-900">
               Question types
             </a>
-            <a href="#math" className="transition hover:text-slate-900">
-              Math engine
+            <a href="#authoring" className="transition hover:text-slate-900">
+              Authoring & grading
             </a>
             <a href="#tenancy" className="transition hover:text-slate-900">
               For schools
@@ -112,15 +112,15 @@ export default async function LandingPage({
           <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white/70 px-3 py-1 text-[11px] font-semibold tracking-wide text-brand-700 shadow-sm">
               <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-              MULTI-TENANT LMS · BUILT FOR MATH
+              MULTI-TENANT LMS · FOR EVERY SUBJECT
             </p>
             <h1 className="mt-5 text-[42px] leading-[1.05] font-bold tracking-[-0.03em] sm:text-[56px]">
-              The <span className="bg-gradient-to-r from-brand-600 to-violet-600 bg-clip-text text-transparent">math-native</span> LMS you can rent.
+              A <span className="bg-gradient-to-r from-brand-600 to-violet-600 bg-clip-text text-transparent">flexible LMS</span> for every subject you teach.
             </h1>
             <p className="mt-5 max-w-xl text-[15px] leading-7 text-slate-600">
-              Launch your own branded academy in minutes. Schools and independent teachers get
-              isolated workspaces, nine modern question types, real LaTeX math, auto-grading and
-              secure course documents — all on one platform.
+              Launch your own branded academy in minutes. Schools, training teams and independent teachers get
+              isolated workspaces, courses and lessons, nine modern question types, auto and manual grading,
+              analytics, and secure learning materials — with rich content support including math and LaTeX.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link href="/signup" className="btn-primary btn-lg">
@@ -146,7 +146,7 @@ export default async function LandingPage({
           <div className="relative mx-auto w-full max-w-[470px] lg:mx-0">
             <div className="absolute -top-5 -right-3 z-10 hidden rotate-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg sm:block">
               <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                <Sigma className="size-3 text-brand-600" /> LaTeX everywhere
+                <Layers className="size-3 text-brand-600" /> 9 question types
               </p>
             </div>
             <div className="absolute -bottom-5 -left-4 z-10 hidden -rotate-2 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg sm:flex">
@@ -154,8 +154,8 @@ export default async function LandingPage({
                 <Zap className="size-3.5" />
               </span>
               <div>
-                <p className="text-[10px] font-semibold text-slate-800">Auto-graded</p>
-                <p className="text-[9px] text-slate-400">±0.01 tolerance</p>
+                <p className="text-[10px] font-semibold text-slate-800">Instant grading</p>
+                <p className="text-[9px] text-slate-400">Auto & manual workflows</p>
               </div>
             </div>
 
@@ -166,27 +166,28 @@ export default async function LandingPage({
                     N
                   </span>
                   <span className="text-[11px] font-semibold text-slate-700">
-                    Algebra II · Quadratics
+                    Biology · Cell energy
                   </span>
                 </div>
-                <span className="badge bg-amber-50 text-amber-700">Case study · 4 pts</span>
+                <span className="badge bg-amber-50 text-amber-700">Quiz · 2 pts</span>
               </div>
               <div className="p-5">
                 <p className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
                   Question 4 of 12 · 08:42 left
                 </p>
                 <p className="mt-2 text-sm font-semibold text-slate-900">
-                  A ball is launched upward. Its height in metres after t seconds is
+                  Which process produces most of a cell&apos;s ATP during aerobic respiration?
                 </p>
-                <MathText
-                  content={"$$h(t) = -4.9t^2 + 19.6t + 1.5$$"}
-                  className="my-2 text-slate-800"
-                />
-                <p className="text-sm font-semibold text-slate-900">
-                  At what time does the ball reach its maximum height?
+                <p className="mt-2 text-sm text-slate-600">
+                  Choose the best answer based on what you learned in this lesson.
                 </p>
                 <div className="mt-3 space-y-1.5">
-                  {["t = 1.5 s", "t = 2.0 s", "t = 3.5 s", "t = 4.0 s"].map((opt, i) => (
+                  {[
+                    "Glycolysis",
+                    "Oxidative phosphorylation",
+                    "Fermentation",
+                    "The Calvin cycle",
+                  ].map((opt, i) => (
                     <div
                       key={opt}
                       className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
@@ -250,9 +251,9 @@ export default async function LandingPage({
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
             {
-              icon: Sigma,
-              title: "Math-first authoring",
-              body: "Write Markdown with $inline$ and $$display$$ LaTeX. A symbol toolbar and live preview make equations effortless.",
+              icon: BookOpen,
+              title: "Rich content authoring",
+              body: "Build lessons and assessments with text, media, documents and structured content — including equations and LaTeX when you need them.",
             },
             {
               icon: Layers,
@@ -262,22 +263,22 @@ export default async function LandingPage({
             {
               icon: Users,
               title: "Real multi-tenancy",
-              body: "Every school and solo teacher gets an isolated workspace with its own members, roles, data and branding.",
+              body: "Every school, team and solo teacher gets an isolated workspace with its own members, roles, data and branding.",
             },
             {
               icon: ClipboardCheck,
               title: "Grading that keeps up",
-              body: "Objective answers grade instantly. Case studies and long answers land in a focused manual grading queue.",
+              body: "Objective answers grade instantly. Case studies and long answers land in a focused manual grading queue with feedback.",
             },
             {
               icon: BarChart3,
               title: "Gradebook & analytics",
-              body: "Per-student, per-assessment results, pass rates and CSV export. See who needs help before the exam.",
+              body: "Per-student, per-assessment results, pass rates, insights and exports. See who needs help before it’s too late.",
             },
             {
               icon: Files,
-              title: "Documents, not just text",
-              body: "Attach PDFs, slides, spreadsheets, images, audio and video to lessons. Private, access-controlled delivery.",
+              title: "Secure course materials",
+              body: "Attach PDFs, slides, spreadsheets, images, audio and video to lessons. Private, access-controlled delivery for learners.",
             },
           ].map((f) => (
             <div key={f.title} className="card p-5 transition hover:-translate-y-0.5 hover:shadow-md">
@@ -335,26 +336,26 @@ export default async function LandingPage({
         </div>
       </section>
 
-      {/* Math */}
-      <section id="math" className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2">
+      {/* Authoring & grading */}
+      <section id="authoring" className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2">
         <div>
           <p className="text-[11px] font-semibold tracking-[0.14em] text-brand-600 uppercase">
-            The math engine
+            Authoring & grading
           </p>
           <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-            Equations that actually render — and actually grade.
+            Create rich learning experiences for any subject.
           </h2>
           <p className="mt-3 text-[15px] leading-7 text-slate-600">
-            KaTeX renders every prompt, option, explanation and student answer. Numeric questions
-            accept tolerances and units; formula questions compare LaTeX with accepted
-            alternatives.
+            Build lessons, quizzes and assessments with flexible content and question formats.
+            Auto-grade objective work, review open responses with rubrics and feedback, and
+            support STEM subjects with built-in math and LaTeX rendering when needed.
           </p>
           <ul className="mt-6 space-y-3">
             {[
-              ["Live LaTeX preview", "A symbol toolbar for fractions, roots, integrals, limits and Greek letters."],
-              ["Tolerance-aware numeric", "Accept 3.14 for π, or require ±0.001 precision — your choice."],
-              ["Formula equivalence", "Normalise LaTeX so \\frac{1}{2} and \\dfrac{1}{2} both pass."],
-              ["Rubrics for open answers", "Break long answers into criteria with point allocations."],
+              ["Flexible content", "Combine text, images, files and structured lessons for any topic or discipline."],
+              ["Math & LaTeX support", "Render equations in prompts and answers, with tools for numeric and formula questions."],
+              ["Auto & manual grading", "Instant results for objective types, plus a focused queue for open-ended and case-study work."],
+              ["Rubrics & feedback", "Score with criteria, leave per-question feedback, and return work for learner revision."],
             ].map(([title, body]) => (
               <li key={title} className="flex gap-3">
                 <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
@@ -373,22 +374,21 @@ export default async function LandingPage({
             <span className="size-2.5 rounded-full bg-rose-400" />
             <span className="size-2.5 rounded-full bg-amber-400" />
             <span className="size-2.5 rounded-full bg-emerald-400" />
-            <span className="ml-2 font-mono text-[10px] text-slate-400">lesson-04.md</span>
+            <span className="ml-2 font-mono text-[10px] text-slate-400">lesson-content.md</span>
           </div>
           <div className="bg-slate-950 p-5 font-mono text-[12px] leading-6 text-slate-300">
-            <p className="text-slate-500">## Solving quadratic equations</p>
-            <p className="mt-2">For any equation of the form</p>
-            <p className="text-indigo-300">$ax^2 + bx + c = 0$</p>
-            <p className="mt-2">the quadratic formula gives</p>
-            <p className="text-2xl text-slate-100">$$x = \frac{"{-b \\pm \\sqrt{b^2-4ac}"}{"{2a}"}$$</p>
-            <p className="mt-2 text-emerald-400">✓ rendered with KaTeX</p>
+            <p className="text-slate-500">## Lesson: Energy and motion</p>
+            <p className="mt-2">Explain key ideas with text, images, files and checks for understanding.</p>
+            <p className="mt-3 text-slate-400">Need equations? LaTeX is supported too:</p>
+            <p className="text-indigo-300">$E_k = \frac{"{1}{2}"}mv^2$</p>
+            <p className="mt-2 text-emerald-400">✓ works for science, math, language, business and more</p>
           </div>
           <div className="border-t border-slate-100 p-5">
             <p className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
-              Student sees
+              Learners can see rendered math when included
             </p>
             <MathText
-              content={"$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$"}
+              content={"$$E_k = \\frac{1}{2}mv^2$$"}
               className="mt-2 text-slate-900"
             />
           </div>
@@ -437,11 +437,11 @@ export default async function LandingPage({
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
                   <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-600 text-xs font-bold text-white">
-                    SM
+                    BP
                   </span>
                   <div>
-                    <p className="text-xs font-bold">Studio Math</p>
-                    <p className="text-[10px] text-slate-400">studiomath.nkanyezi.app</p>
+                    <p className="text-xs font-bold">BrightPath Learning</p>
+                    <p className="text-[10px] text-slate-400">brightpath.nkanyezi.app</p>
                   </div>
                 </div>
                 <span className="badge bg-emerald-50 text-emerald-700">Growth</span>
@@ -452,7 +452,7 @@ export default async function LandingPage({
               <div className="mt-2 space-y-2">
                 {[
                   ["Northfield Academy", "Owner · 412 learners", true],
-                  ["Studio Math", "Owner · 38 learners", false],
+                  ["BrightPath Learning", "Owner · 38 learners", false],
                   ["Riverside Tutoring", "Teacher · 12 learners", false],
                 ].map(([name, meta, active]) => (
                   <div
@@ -554,7 +554,7 @@ export default async function LandingPage({
               Rent it monthly. Cancel anytime.
             </h2>
             <p className="mt-3 text-[15px] leading-7 text-slate-600">
-              Every plan includes the full assessment engine, math rendering and secure documents.
+              Every plan includes courses, lessons, assessments, grading, analytics and secure learning materials.
               Start with a 14-day Growth trial.
             </p>
           </div>
@@ -618,8 +618,8 @@ export default async function LandingPage({
                 Step inside Northfield Academy.
               </h2>
               <p className="mt-3 max-w-md text-sm leading-6 text-slate-600">
-                A fully seeded school with a published Algebra II course, all nine question types,
-                real attempts and a grading queue. One click — no signup.
+                A fully seeded workspace with published courses, all nine question types, real attempts,
+                grading workflows and analytics. One click — no signup.
               </p>
               <div className="mt-5 rounded-xl bg-slate-50 p-4 font-mono text-[11px] leading-6 text-slate-600">
                 <p>
@@ -629,7 +629,7 @@ export default async function LandingPage({
                   owner@northfield.edu <span className="text-slate-400">· school owner</span>
                 </p>
                 <p>
-                  teacher@northfield.edu <span className="text-slate-400">· math teacher</span>
+                  teacher@northfield.edu <span className="text-slate-400">· teacher</span>
                 </p>
                 <p>
                   student@northfield.edu <span className="text-slate-400">· student</span>
@@ -645,7 +645,7 @@ export default async function LandingPage({
                 {[
                   { role: "admin", label: "Platform admin", desc: "All tenants, plans & audit", icon: Globe2 },
                   { role: "owner", label: "School owner", desc: "Full admin, billing & audit", icon: ShieldCheck },
-                  { role: "teacher", label: "Math teacher", desc: "Builder, gradebook & grading", icon: GraduationCap },
+                  { role: "teacher", label: "Teacher", desc: "Builder, gradebook & grading", icon: GraduationCap },
                   { role: "student", label: "Student", desc: "Courses, quizzes & results", icon: Users },
                   { role: "solo", label: "Solo teacher", desc: "Second tenant · own brand", icon: Sparkles },
                 ].map((d) => (
@@ -681,11 +681,11 @@ export default async function LandingPage({
           />
           <div className="relative">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Your academy. Your brand. Your math.
+              Your academy. Your brand. Your way.
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-indigo-100">
-              Spin up a tenant in under a minute, invite your first class and publish a math
-              assessment today.
+              Spin up a tenant in under a minute, invite your first class and publish your
+              first course or assessment today.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link
@@ -710,13 +710,14 @@ export default async function LandingPage({
           <div>
             <Logo />
             <p className="mt-2 max-w-xs text-[11px] leading-5 text-slate-500">
-              The math-native, multi-tenant learning platform for schools, tutoring groups and
+              A flexible, multi-tenant learning platform for schools, training teams, tutoring groups and
               independent teachers.
             </p>
           </div>
           <div className="flex flex-wrap gap-x-8 gap-y-2 text-[12px] text-slate-600">
             <a href="#features" className="hover:text-slate-900">Features</a>
             <a href="#questions" className="hover:text-slate-900">Question types</a>
+            <a href="#authoring" className="hover:text-slate-900">Authoring & grading</a>
             <a href="#pricing" className="hover:text-slate-900">Pricing</a>
             <Link href="/login" className="hover:text-slate-900">Sign in</Link>
             <Link href="/signup" className="hover:text-slate-900">Start free</Link>
