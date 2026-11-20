@@ -7,8 +7,10 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  ClipboardPaste,
   Code2,
   Eye,
+  FileText,
   ImagePlus,
   Indent,
   Italic,
@@ -108,6 +110,7 @@ export type StyleAction =
 
 type EditorAction = FormatAction | StyleAction;
 type HistoryAction = "undo" | "redo";
+type PasteMode = "formatted" | "unformatted";
 
 type FormatResult = {
   next: string;
@@ -797,17 +800,21 @@ function AdvancedToolbar({
   onStyle,
   onSpecialCharacter,
   onHistory,
+  onPaste,
 }: {
   onAction: (action: FormatAction) => void;
   onStyle: (action: StyleAction) => void;
   onSpecialCharacter: (character: string) => void;
   onHistory: (action: HistoryAction) => void;
+  onPaste: (mode: PasteMode) => void;
 }) {
   const [color, setColor] = useState("#2563eb");
   const keepSelection = (event: React.MouseEvent) => event.preventDefault();
 
   const iconButton =
     "inline-flex size-7 shrink-0 items-center justify-center rounded border border-transparent text-slate-600 transition hover:border-slate-200 hover:bg-white hover:text-brand-700";
+  const labeledButton =
+    "inline-flex h-7 shrink-0 items-center gap-1 rounded border border-transparent px-1.5 text-[11px] font-medium text-slate-600 transition hover:border-slate-200 hover:bg-white hover:text-brand-700";
 
   return (
     <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-2 py-1.5">
@@ -892,6 +899,17 @@ function AdvancedToolbar({
       </button>
       <button type="button" onMouseDown={keepSelection} onClick={() => onAction("horizontalRule")} title="Horizontal line" aria-label="Horizontal line" className={iconButton}>
         <Minus className="size-3.5" />
+      </button>
+
+      <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+
+      <button type="button" onMouseDown={keepSelection} onClick={() => onPaste("formatted")} title="Paste formatted" aria-label="Paste formatted" className={labeledButton}>
+        <ClipboardPaste className="size-3.5" />
+        Paste formatted
+      </button>
+      <button type="button" onMouseDown={keepSelection} onClick={() => onPaste("unformatted")} title="Paste unformatted" aria-label="Paste unformatted" className={labeledButton}>
+        <FileText className="size-3.5" />
+        Paste unformatted
       </button>
 
       <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
@@ -1014,6 +1032,7 @@ export function RichTextEditor({
   const [fullscreen, setFullscreen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [pasteError, setPasteError] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkEditing, setLinkEditing] = useState(false);
   const [linkUrl, setLinkUrl] = useState("https://");
@@ -1084,6 +1103,22 @@ export function RichTextEditor({
     el.focus();
     restoreEditorSelection();
     return isSelectionInsideEditor();
+  }
+
+  /** Paste at the saved selection, or at the end when the editor was not focused yet. */
+  function prepareVisualPaste() {
+    const el = editorRef.current;
+    if (!el) return false;
+    if (prepareVisualEdit()) return true;
+    el.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    savedRangeRef.current = range.cloneRange();
+    return true;
   }
 
   function closestWithin(node: Node | null, selector: string) {
@@ -1394,6 +1429,80 @@ export function RichTextEditor({
     else insertText(character);
   }
 
+  async function pasteFromClipboard(pasteMode: PasteMode) {
+    setPasteError("");
+    const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard;
+    if (!clipboard || typeof clipboard.readText !== "function") {
+      setPasteError("Clipboard access is not available in this browser.");
+      return;
+    }
+
+    function insertVisualHtml(markup: string) {
+      if (!prepareVisualPaste()) return;
+      document.execCommand("insertHTML", false, markup);
+      syncFromEditor();
+    }
+
+    try {
+      let text = "";
+      let html = "";
+
+      if (pasteMode === "unformatted") {
+        text = await clipboard.readText();
+        if (!text && typeof clipboard.read === "function") {
+          const items = await clipboard.read();
+          for (const item of items) {
+            if (!item.types.includes("text/html")) continue;
+            const raw = await (await item.getType("text/html")).text();
+            const holder = document.createElement("div");
+            holder.innerHTML = sanitizeEditorHtml(raw);
+            text = (holder.textContent ?? "").replace(/\u00a0/g, " ");
+            break;
+          }
+        }
+        if (!text) return;
+        if (mode === "visual" && !preview) {
+          insertVisualHtml(escapeHtml(text).replace(/\r?\n/g, "<br>"));
+        } else {
+          insertText(text);
+        }
+        return;
+      }
+
+      // Formatted paste keeps rich HTML when the clipboard provides it, and
+      // falls back to the plain-text flavor otherwise.
+      text = await clipboard.readText().catch(() => "");
+      if (typeof clipboard.read === "function") {
+        try {
+          const items = await clipboard.read();
+          for (const item of items) {
+            if (item.types.includes("text/html") && !html) {
+              html = await (await item.getType("text/html")).text();
+            }
+          }
+        } catch {
+          // Plain-text fallback still lets the paste succeed.
+        }
+      }
+      if (!html) html = escapeHtml(text).replace(/\r?\n/g, "<br>");
+      const safeHtml = sanitizeEditorHtml(html);
+      if (!safeHtml.trim()) return;
+
+      if (mode === "visual" && !preview) {
+        insertVisualHtml(safeHtml);
+      } else {
+        insertText(htmlToMarkdown(safeHtml));
+      }
+    } catch (error) {
+      const name = (error as { name?: string })?.name;
+      setPasteError(
+        name === "NotAllowedError"
+          ? "Clipboard permission denied. Allow clipboard access or use Ctrl/Cmd+V."
+          : "Could not read clipboard content."
+      );
+    }
+  }
+
   function applyLink() {
     if (!prepareVisualEdit()) return;
     const href = safeHref(linkUrl);
@@ -1578,6 +1687,7 @@ export function RichTextEditor({
                   onStyle={applyStyle}
                   onSpecialCharacter={insertSpecialCharacter}
                   onHistory={applyHistory}
+                  onPaste={pasteFromClipboard}
                 />
               )}
             </div>
@@ -1681,9 +1791,10 @@ export function RichTextEditor({
       </div>
 
       {uploadError && <p className="mt-1.5 text-xs font-medium text-rose-600">{uploadError}</p>}
+      {pasteError && <p className="mt-1.5 text-xs font-medium text-rose-600">{pasteError}</p>}
       <p className="mt-1.5 text-[11px] text-slate-400">
         Visual mode shows formatted text while editing · Code mode shows the Markdown source · Use
-        More formatting or Fullscreen for advanced controls · Math is off until enabled
+        More formatting for paste, colors and other advanced controls · Math is off until enabled
       </p>
     </div>
   );
