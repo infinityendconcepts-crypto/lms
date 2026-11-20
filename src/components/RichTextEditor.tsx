@@ -2,21 +2,37 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
   Bold,
   Code2,
   Eye,
   ImagePlus,
+  Indent,
   Italic,
   Link2,
   List,
   ListOrdered,
   Loader2,
+  Maximize2,
+  Minimize2,
+  Minus,
+  Outdent,
+  Palette,
   Quote,
+  Redo2,
   Sigma,
+  Smile,
   Strikethrough,
+  Type,
+  Underline,
+  Undo2,
 } from "lucide-react";
 import { MathText } from "@/components/MathText";
 import { cn } from "@/lib/utils";
+import { normalizeStyleString, styleObjectToString } from "@/lib/editorHtml";
 
 const SNIPPETS: { label: string; value: string }[] = [
   { label: "x²", value: "x^2" },
@@ -32,6 +48,36 @@ const SNIPPETS: { label: string; value: string }[] = [
   { label: "lim", value: "\\lim_{x \\to 0}" },
 ];
 
+const SPECIAL_CHARACTERS = [
+  "©",
+  "®",
+  "™",
+  "€",
+  "£",
+  "¥",
+  "°",
+  "±",
+  "×",
+  "÷",
+  "−",
+  "—",
+  "…",
+  "“",
+  "”",
+  "‘",
+  "’",
+  "→",
+  "←",
+  "↔",
+  "α",
+  "β",
+  "π",
+  "Σ",
+];
+
+const FONT_FAMILIES = ["Arial", "Georgia", "Verdana", "monospace", "serif", "sans-serif"];
+const FONT_SIZES = ["12px", "14px", "16px", "18px", "20px", "24px", "32px"];
+
 export type FormatAction =
   | "paragraph"
   | "heading1"
@@ -40,18 +86,74 @@ export type FormatAction =
   | "bold"
   | "italic"
   | "strikethrough"
+  | "underline"
   | "bullet"
   | "number"
   | "quote"
   | "link"
   | "code"
-  | "codeblock";
+  | "codeblock"
+  | "horizontalRule"
+  | "alignLeft"
+  | "alignCenter"
+  | "alignRight"
+  | "alignJustify"
+  | "indent"
+  | "outdent";
+
+export type StyleAction =
+  | { type: "color"; value: string }
+  | { type: "fontSize"; value: string }
+  | { type: "fontFamily"; value: string };
+
+type EditorAction = FormatAction | StyleAction;
+type HistoryAction = "undo" | "redo";
 
 type FormatResult = {
   next: string;
   selectionStart: number;
   selectionEnd: number;
 };
+
+const ALLOWED_EDITOR_TAGS = new Set([
+  "a",
+  "b",
+  "blockquote",
+  "br",
+  "code",
+  "del",
+  "div",
+  "em",
+  "font",
+  "h1",
+  "h2",
+  "h3",
+  "hr",
+  "i",
+  "img",
+  "li",
+  "ol",
+  "p",
+  "pre",
+  "s",
+  "span",
+  "strike",
+  "strong",
+  "u",
+  "ul",
+]);
+
+const DROPPED_EDITOR_TAGS = new Set([
+  "script",
+  "style",
+  "iframe",
+  "object",
+  "embed",
+  "link",
+  "meta",
+]);
+
+const RAW_TAG_PATTERN = /<\/?(?:span|div|p|u|font|hr)\b[^>]*>/gi;
 
 function escapeHtml(value: string) {
   return value
@@ -70,24 +172,142 @@ function safeHref(value: string) {
   return /^(https?:\/\/|mailto:|\/|#)/i.test(href) ? href : "#";
 }
 
+function safeImageSrc(value: string) {
+  const src = value.trim();
+  return /^(https?:\/\/|\/)/i.test(src) ? src : "";
+}
+
+function parseStyleDeclarations(style: string | null | undefined) {
+  const declarations: Record<string, string> = {};
+  for (const part of normalizeStyleString(style).split(";").filter(Boolean)) {
+    const separator = part.indexOf(":");
+    if (separator < 1) continue;
+    declarations[part.slice(0, separator).trim()] = part.slice(separator + 1).trim();
+  }
+  return declarations;
+}
+
+function styleActionToDeclaration(action: StyleAction): Record<string, string> {
+  if (action.type === "color") return { color: action.value };
+  if (action.type === "fontSize") return { "font-size": action.value };
+  return { "font-family": action.value };
+}
+
+function styledTag(tag: string, style: string, content: string) {
+  const safeStyle = normalizeStyleString(style);
+  return safeStyle
+    ? `<${tag} style="${escapeAttr(safeStyle)}">${content}</${tag}>`
+    : `<${tag}>${content}</${tag}>`;
+}
+
+/** Sanitize the small HTML subset produced by the advanced editor controls. */
+function sanitizeEditorHtml(html: string) {
+  if (typeof document === "undefined") return html;
+  const template = document.createElement("template");
+  template.innerHTML = html;
+
+  function clean(parent: Node) {
+    for (const child of Array.from(parent.childNodes)) {
+      if (child.nodeType !== Node.ELEMENT_NODE) continue;
+      const el = child as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+
+      if (DROPPED_EDITOR_TAGS.has(tag)) {
+        child.remove();
+        continue;
+      }
+
+      clean(el);
+
+      if (!ALLOWED_EDITOR_TAGS.has(tag)) {
+        child.replaceWith(...Array.from(child.childNodes));
+        continue;
+      }
+
+      for (const attribute of Array.from(el.attributes)) {
+        const name = attribute.name.toLowerCase();
+        if (name === "style") {
+          const safe = normalizeStyleString(attribute.value);
+          if (safe) el.setAttribute("style", safe);
+          else el.removeAttribute("style");
+        } else if (tag === "a" && name === "href") {
+          el.setAttribute("href", safeHref(attribute.value));
+        } else if (tag === "img" && name === "src") {
+          const src = safeImageSrc(attribute.value);
+          if (src) el.setAttribute("src", src);
+          else el.removeAttribute("src");
+        } else if (tag === "img" && name === "alt") {
+          el.setAttribute("alt", attribute.value);
+        } else if (tag === "font" && name === "color") {
+          const safe = normalizeStyleString(`color: ${attribute.value}`);
+          if (safe) el.setAttribute("color", safe.replace("color: ", ""));
+          else el.removeAttribute("color");
+        } else if (tag === "font" && name === "face") {
+          const face = attribute.value.trim();
+          if (FONT_FAMILIES.includes(face)) el.setAttribute("face", face);
+          else el.removeAttribute("face");
+        } else if (tag === "font" && name === "size") {
+          if (/^[1-7]$/.test(attribute.value.trim())) {
+            el.setAttribute("size", attribute.value.trim());
+          } else {
+            el.removeAttribute("size");
+          }
+        } else {
+          el.removeAttribute(name);
+        }
+      }
+    }
+  }
+
+  clean(template.content);
+  return template.innerHTML;
+}
+
+function flattenSpans(root: ParentNode) {
+  for (const span of Array.from(root.querySelectorAll("span"))) {
+    while (span.firstChild) span.parentNode?.insertBefore(span.firstChild, span);
+    span.remove();
+  }
+}
+
+function setBlockIndentation(block: HTMLElement | null, direction: number) {
+  if (!block) return;
+  const current = Number.parseInt(block.style.marginLeft || "0", 10) || 0;
+  const next = Math.max(0, Math.min(240, current + direction * 24));
+  if (next === 0) block.style.removeProperty("margin-left");
+  else block.style.marginLeft = `${next}px`;
+}
+
+function protectRawTags(text: string, tokens: string[]) {
+  return text.replace(RAW_TAG_PATTERN, (tag) => {
+    tokens.push(tag);
+    return `\u0001${tokens.length - 1}\u0001`;
+  });
+}
+
 function inlineToHtml(text: string) {
   const codeTokens: string[] = [];
-  let html = escapeHtml(text);
+  const rawTags: string[] = [];
 
-  html = html.replace(/`([^`]+)`/g, (_match, code: string) => {
-    codeTokens.push(`<code>${code}</code>`);
+  let prepared = text.replace(/`([^`]+)`/g, (_match, code: string) => {
+    codeTokens.push(`<code>${escapeHtml(code)}</code>`);
     return `\u0000${codeTokens.length - 1}\u0000`;
   });
+  prepared = protectRawTags(prepared, rawTags);
 
-  html = html
+  let html = escapeHtml(prepared)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/~~([^~]+)~~/g, "<s>$1</s>")
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label: string, href: string) => {
-      return `<a href="${safeHref(href)}">${label}</a>`;
+      return `<a href="${escapeAttr(safeHref(href))}">${label}</a>`;
     });
 
-  return html.replace(/\u0000(\d+)\u0000/g, (_match, index: string) => codeTokens[Number(index)] ?? "");
+  html = html
+    .replace(/\u0001(\d+)\u0001/g, (_match, index: string) => rawTags[Number(index)] ?? "")
+    .replace(/\u0000(\d+)\u0000/g, (_match, index: string) => codeTokens[Number(index)] ?? "");
+
+  return html;
 }
 
 function isBlockStart(line: string) {
@@ -95,7 +315,9 @@ function isBlockStart(line: string) {
     /^\s*```/.test(line) ||
     /^#{1,6}\s/.test(line) ||
     /^\s*(?:[-*+]|\d+\.)\s/.test(line) ||
-    /^>\s?/.test(line)
+    /^>\s?/.test(line) ||
+    /^\s*(?:---+|\*\*\*+|___+)\s*$/.test(line) ||
+    /^\s*<(?:div|p|hr)\b/i.test(line)
   );
 }
 
@@ -120,6 +342,23 @@ function markdownToHtml(markdown: string) {
       }
       i += 1;
       html += `<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`;
+      continue;
+    }
+
+    if (/^\s*(?:---+|\*\*\*+|___+)\s*$/.test(line) || /^\s*<hr\b/i.test(line)) {
+      html += "<hr>";
+      i += 1;
+      continue;
+    }
+
+    if (/^\s*<(?:div|p)\b/i.test(line)) {
+      const raw = [line];
+      while (i + 1 < lines.length && !/<\/(?:div|p)>\s*$/i.test(raw[raw.length - 1])) {
+        i += 1;
+        raw.push(lines[i]);
+      }
+      html += inlineToHtml(raw.join("\n"));
+      i += 1;
       continue;
     }
 
@@ -164,7 +403,7 @@ function markdownToHtml(markdown: string) {
     html += `<p>${paragraph.map(inlineToHtml).join("<br>")}</p>`;
   }
 
-  return html;
+  return sanitizeEditorHtml(html);
 }
 
 function serializeNode(node: Node): string {
@@ -176,22 +415,26 @@ function serializeNode(node: Node): string {
   const el = node as HTMLElement;
   const tag = el.tagName.toLowerCase();
   const children = Array.from(el.childNodes).map(serializeNode).join("");
+  const style = normalizeStyleString(el.getAttribute("style"));
+  const inner = children.trim();
 
   switch (tag) {
     case "br":
       return "\n";
     case "strong":
     case "b":
-      return `**${children.trim()}**`;
+      return `**${inner}**`;
     case "em":
     case "i":
-      return `*${children.trim()}*`;
+      return `*${inner}*`;
     case "s":
     case "strike":
     case "del":
-      return `~~${children.trim()}~~`;
+      return `~~${inner}~~`;
+    case "u":
+      return `<u>${inner}</u>`;
     case "code": {
-      const text = children.trim() || el.textContent || "";
+      const text = el.textContent || "";
       const tick = text.includes("`") ? "``" : "`";
       return `${tick}${text}${tick}`;
     }
@@ -199,18 +442,24 @@ function serializeNode(node: Node): string {
       const text = (el.innerText || el.textContent || "").replace(/\n$/, "");
       return `\n\`\`\`\n${text}\n\`\`\`\n`;
     }
+    case "hr":
+      return "\n\n---\n\n";
     case "a":
-      return `[${children.trim()}](${el.getAttribute("href") ?? ""})`;
+      return `[${inner}](${escapeAttr(el.getAttribute("href") ?? "")})`;
     case "img":
-      return `![${el.getAttribute("alt") ?? ""}](${el.getAttribute("src") ?? ""})`;
+      return `![${escapeAttr(el.getAttribute("alt") ?? "")}](${escapeAttr(
+        el.getAttribute("src") ?? ""
+      )})`;
     case "p":
-      return `${children.trim()}\n\n`;
+      return style
+        ? `${styledTag("p", style, inner)}\n\n`
+        : `${inner}\n\n`;
     case "h1":
-      return `# ${children.trim()}\n\n`;
+      return style ? `${styledTag("h1", style, `# ${inner}`)}\n\n` : `# ${inner}\n\n`;
     case "h2":
-      return `## ${children.trim()}\n\n`;
+      return style ? `${styledTag("h2", style, `## ${inner}`)}\n\n` : `## ${inner}\n\n`;
     case "h3":
-      return `### ${children.trim()}\n\n`;
+      return style ? `${styledTag("h3", style, `### ${inner}`)}\n\n` : `### ${inner}\n\n`;
     case "blockquote": {
       const lines = children
         .split("\n")
@@ -230,15 +479,24 @@ function serializeNode(node: Node): string {
       return `${items.join("\n")}\n\n`;
     }
     case "li":
-      return `- ${children.trim()}\n`;
+      return `- ${inner}\n`;
     case "span": {
-      const style = el.getAttribute("style") ?? "";
-      if (/font-weight:\s*(?:bold|[6-9]00)/i.test(style)) return `**${children.trim()}**`;
-      if (/font-weight:\s*(?:normal|400)/i.test(style)) return children.trim();
-      return children;
+      const rawStyle = el.getAttribute("style") ?? "";
+      if (/font-weight:\s*(?:bold|[6-9]00)/i.test(rawStyle)) return `**${inner}**`;
+      if (/font-weight:\s*(?:normal|400)/i.test(rawStyle)) return inner;
+      return style ? `<span style="${escapeAttr(style)}">${inner}</span>` : inner;
+    }
+    case "font": {
+      const declarations: Record<string, string> = {};
+      const color = normalizeStyleString(`color: ${el.getAttribute("color") ?? ""}`);
+      if (color) declarations.color = color.replace("color: ", "");
+      const face = (el.getAttribute("face") ?? "").trim();
+      if (FONT_FAMILIES.includes(face)) declarations["font-family"] = face;
+      const css = styleObjectToString(declarations);
+      return css ? `<span style="${escapeAttr(css)}">${inner}</span>` : inner;
     }
     case "div":
-      return `${children}\n`;
+      return style ? `${styledTag("div", style, inner)}\n\n` : `${inner}\n\n`;
     default:
       return children;
   }
@@ -256,14 +514,14 @@ function htmlToMarkdown(html: string) {
 }
 
 /**
- * Apply a Markdown formatting action to a textarea selection. Used by Code mode
- * and by the assessment editors, which still write Markdown directly.
+ * Apply a formatting action to a textarea selection. Used by Code mode and by
+ * the assessment editors, which still write Markdown directly.
  */
 export function formatSelection(
   value: string,
   start: number,
   end: number,
-  action: FormatAction
+  action: EditorAction
 ): FormatResult {
   const selected = value.slice(start, end);
 
@@ -293,6 +551,23 @@ export function formatSelection(
     };
   }
 
+  function wrapLines(before: string, after: string): FormatResult {
+    const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+    const nextBreak = value.indexOf("\n", end);
+    const lineEnd = nextBreak === -1 ? value.length : nextBreak;
+    const block = value.slice(lineStart, lineEnd);
+    return {
+      next: value.slice(0, lineStart) + before + block + after + value.slice(lineEnd),
+      selectionStart: lineStart + before.length,
+      selectionEnd: lineStart + before.length + block.length,
+    };
+  }
+
+  if (typeof action === "object") {
+    const css = styleObjectToString(styleActionToDeclaration(action));
+    return wrap(`<span style="${escapeAttr(css)}">`, "</span>", selected || "text");
+  }
+
   switch (action) {
     case "paragraph":
       return replaceLines("");
@@ -308,6 +583,8 @@ export function formatSelection(
       return wrap("*", "*", "italic text");
     case "strikethrough":
       return wrap("~~", "~~", "struck out text");
+    case "underline":
+      return wrap("<u>", "</u>", "underlined text");
     case "bullet":
       return replaceLines("- ");
     case "number":
@@ -329,6 +606,24 @@ export function formatSelection(
       return wrap("`", "`", "code");
     case "codeblock":
       return wrap("```\n", "\n```", "code");
+    case "horizontalRule":
+      return {
+        next: `${value.slice(0, start)}\n\n---\n\n${value.slice(end)}`,
+        selectionStart: start + 6,
+        selectionEnd: start + 6,
+      };
+    case "alignLeft":
+      return wrapLines('<div style="text-align: left;">', "</div>");
+    case "alignCenter":
+      return wrapLines('<div style="text-align: center;">', "</div>");
+    case "alignRight":
+      return wrapLines('<div style="text-align: right;">', "</div>");
+    case "alignJustify":
+      return wrapLines('<div style="text-align: justify;">', "</div>");
+    case "indent":
+      return wrapLines('<div style="margin-left: 24px;">', "</div>");
+    case "outdent":
+      return wrapLines("", "");
   }
 }
 
@@ -354,12 +649,12 @@ const FORMAT_BUTTONS: {
     icon: ListOrdered,
   },
   { action: "quote", label: "Quote", title: "Blockquote", icon: Quote },
-  { action: "link", label: "Link", title: "Insert link", icon: Link2 },
-  { action: "code", label: "Inline code", title: "Inline code", icon: Code2 },
+  { action: "link", label: "Link", title: "Insert or edit link", icon: Link2 },
+  { action: "code", label: "Inline code", title: "Toggle inline code", icon: Code2 },
   {
     action: "codeblock",
     label: "Code block",
-    title: "Code block",
+    title: "Toggle code block",
     icon: Code2,
   },
 ];
@@ -374,6 +669,8 @@ export function EditorToolbar({
   onPreview,
   mathEnabled,
   onMathToggle,
+  advancedOpen,
+  onAdvancedToggle,
   compact = false,
 }: {
   onFormat: (action: FormatAction) => void;
@@ -381,6 +678,8 @@ export function EditorToolbar({
   onPreview?: () => void;
   mathEnabled?: boolean;
   onMathToggle?: () => void;
+  advancedOpen?: boolean;
+  onAdvancedToggle?: () => void;
   compact?: boolean;
 }) {
   const [blockStyle, setBlockStyle] = useState("");
@@ -458,6 +757,24 @@ export function EditorToolbar({
           <Sigma className="size-3.5" />
         </button>
       )}
+      {onAdvancedToggle && (
+        <button
+          type="button"
+          onMouseDown={keepSelection}
+          onClick={onAdvancedToggle}
+          aria-expanded={Boolean(advancedOpen)}
+          title="More formatting"
+          aria-label="More formatting"
+          className={cn(
+            "inline-flex size-7 shrink-0 items-center justify-center rounded border transition",
+            advancedOpen
+              ? "border-brand-300 bg-brand-50 text-brand-700"
+              : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-white hover:text-brand-700"
+          )}
+        >
+          <Palette className="size-3.5" />
+        </button>
+      )}
       {onPreview && (
         <button
           type="button"
@@ -470,6 +787,144 @@ export function EditorToolbar({
           <Eye className="size-3.5" />
         </button>
       )}
+    </div>
+  );
+}
+
+/** Formatting controls shown only when the editor is expanded. */
+function AdvancedToolbar({
+  onAction,
+  onStyle,
+  onSpecialCharacter,
+  onHistory,
+}: {
+  onAction: (action: FormatAction) => void;
+  onStyle: (action: StyleAction) => void;
+  onSpecialCharacter: (character: string) => void;
+  onHistory: (action: HistoryAction) => void;
+}) {
+  const [color, setColor] = useState("#2563eb");
+  const keepSelection = (event: React.MouseEvent) => event.preventDefault();
+
+  const iconButton =
+    "inline-flex size-7 shrink-0 items-center justify-center rounded border border-transparent text-slate-600 transition hover:border-slate-200 hover:bg-white hover:text-brand-700";
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-2 py-1.5">
+      <label className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-medium text-slate-600">
+        <Palette className="size-3.5 text-slate-500" />
+        Color
+        <input
+          type="color"
+          value={color}
+          aria-label="Text color"
+          onChange={(e) => {
+            setColor(e.target.value);
+            onStyle({ type: "color", value: e.target.value });
+          }}
+          className="size-5 cursor-pointer border-0 bg-transparent p-0"
+        />
+      </label>
+
+      <label className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-medium text-slate-600">
+        <Type className="size-3.5 text-slate-500" />
+        Size
+        <select
+          aria-label="Font size"
+          defaultValue=""
+          onChange={(e) => {
+            if (e.target.value) onStyle({ type: "fontSize", value: e.target.value });
+            e.target.value = "";
+          }}
+          className="h-5 border-0 bg-transparent pr-1 text-[11px] text-slate-700 focus:ring-0"
+        >
+          <option value="">—</option>
+          {FONT_SIZES.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-medium text-slate-600">
+        Font
+        <select
+          aria-label="Font family"
+          defaultValue=""
+          onChange={(e) => {
+            if (e.target.value) onStyle({ type: "fontFamily", value: e.target.value });
+            e.target.value = "";
+          }}
+          className="h-5 max-w-24 border-0 bg-transparent pr-1 text-[11px] text-slate-700 focus:ring-0"
+        >
+          <option value="">—</option>
+          {FONT_FAMILIES.map((font) => (
+            <option key={font} value={font}>
+              {font}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+
+      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("underline")} title="Underline" aria-label="Underline" className={iconButton}>
+        <Underline className="size-3.5" />
+      </button>
+      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("alignLeft")} title="Align left" aria-label="Align left" className={iconButton}>
+        <AlignLeft className="size-3.5" />
+      </button>
+      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("alignCenter")} title="Align center" aria-label="Align center" className={iconButton}>
+        <AlignCenter className="size-3.5" />
+      </button>
+      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("alignRight")} title="Align right" aria-label="Align right" className={iconButton}>
+        <AlignRight className="size-3.5" />
+      </button>
+      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("alignJustify")} title="Justify" aria-label="Justify" className={iconButton}>
+        <AlignJustify className="size-3.5" />
+      </button>
+      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("outdent")} title="Decrease indent" aria-label="Decrease indent" className={iconButton}>
+        <Outdent className="size-3.5" />
+      </button>
+      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("indent")} title="Increase indent" aria-label="Increase indent" className={iconButton}>
+        <Indent className="size-3.5" />
+      </button>
+      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("horizontalRule")} title="Horizontal line" aria-label="Horizontal line" className={iconButton}>
+        <Minus className="size-3.5" />
+      </button>
+
+      <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+
+      <label className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-medium text-slate-600">
+        <Smile className="size-3.5 text-slate-500" />
+        Symbol
+        <select
+          aria-label="Special character"
+          defaultValue=""
+          onChange={(e) => {
+            if (e.target.value) onSpecialCharacter(e.target.value);
+            e.target.value = "";
+          }}
+          className="h-5 max-w-20 border-0 bg-transparent pr-1 text-[11px] text-slate-700 focus:ring-0"
+        >
+          <option value="">—</option>
+          {SPECIAL_CHARACTERS.map((character) => (
+            <option key={character} value={character}>
+              {character}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+
+      <button type="button" onMouseDown={keepSelection} onClick={() => onHistory("undo")} title="Undo" aria-label="Undo" className={iconButton}>
+        <Undo2 className="size-3.5" />
+      </button>
+      <button type="button" onMouseDown={keepSelection} onClick={() => onHistory("redo")} title="Redo" aria-label="Redo" className={iconButton}>
+        <Redo2 className="size-3.5" />
+      </button>
     </div>
   );
 }
@@ -547,14 +1002,20 @@ export function RichTextEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const skipEditorSync = useRef(false);
+  const lastRenderedValueRef = useRef(defaultValue);
   const savedRangeRef = useRef<Range | null>(null);
+  const toolbarInteractionRef = useRef(false);
+  const linkAnchorRef = useRef<HTMLAnchorElement | null>(null);
   const [value, setValue] = useState(defaultValue);
   const [mode, setMode] = useState<"visual" | "code">("visual");
   const [preview, setPreview] = useState(false);
   const [mathEnabled, setMathEnabled] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
+  const [linkEditing, setLinkEditing] = useState(false);
   const [linkUrl, setLinkUrl] = useState("https://");
 
   useEffect(() => {
@@ -563,12 +1024,84 @@ export function RichTextEditor({
     if (!el) return;
     if (skipEditorSync.current) {
       skipEditorSync.current = false;
+      lastRenderedValueRef.current = value;
       return;
     }
-    if (document.activeElement === el) return;
+    if (lastRenderedValueRef.current === value && el.innerHTML.trim()) return;
+    lastRenderedValueRef.current = value;
     const html = markdownToHtml(value);
     if (el.innerHTML !== html) el.innerHTML = html;
   }, [value, mode, preview]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (linkOpen) {
+        setLinkOpen(false);
+        return;
+      }
+      setFullscreen(false);
+      setAdvancedOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [fullscreen, linkOpen]);
+
+  function isSelectionInsideEditor() {
+    const selection = window.getSelection();
+    const editor = editorRef.current;
+    if (!selection || !editor || selection.rangeCount === 0) return false;
+    const node = selection.anchorNode;
+    return Boolean(node && (node === editor || editor.contains(node)));
+  }
+
+  function saveEditorSelection() {
+    if (linkOpen || toolbarInteractionRef.current) return;
+    const selection = window.getSelection();
+    if (isSelectionInsideEditor() && selection?.rangeCount) {
+      savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+    }
+  }
+
+  function restoreEditorSelection() {
+    const selection = window.getSelection();
+    const range = savedRangeRef.current;
+    const editor = editorRef.current;
+    if (!selection || !range || !editor || !editor.contains(range.startContainer)) return;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function prepareVisualEdit() {
+    const el = editorRef.current;
+    if (!el) return false;
+    el.focus();
+    restoreEditorSelection();
+    return isSelectionInsideEditor();
+  }
+
+  function closestWithin(node: Node | null, selector: string) {
+    const editor = editorRef.current;
+    if (!editor) return null;
+    const element =
+      node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
+    const match = element?.closest(selector) as HTMLElement | null;
+    return match && editor.contains(match) ? match : null;
+  }
+
+  function unwrapElement(el: Element) {
+    const parent = el.parentNode;
+    if (!parent) return;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  }
 
   function focusSelection(selectionStart: number, selectionEnd: number) {
     requestAnimationFrame(() => {
@@ -585,7 +1118,9 @@ export function RichTextEditor({
     const next = htmlToMarkdown(el.innerHTML);
     if (next === value) return;
     skipEditorSync.current = true;
+    lastRenderedValueRef.current = next;
     setValue(next);
+    saveEditorSelection();
   }
 
   function insertText(text: string) {
@@ -598,9 +1133,7 @@ export function RichTextEditor({
   }
 
   function insertVisualText(text: string) {
-    const el = editorRef.current;
-    if (!el) return;
-    el.focus();
+    if (!prepareVisualEdit()) return;
     document.execCommand("insertText", false, text);
     syncFromEditor();
   }
@@ -613,11 +1146,65 @@ export function RichTextEditor({
     insertText(snippet);
   }
 
+  function removeInlineCode() {
+    const selection = window.getSelection();
+    const code = closestWithin(selection?.anchorNode ?? null, "code");
+    if (!code || code.closest("pre")) return false;
+    const textNode = code.firstChild;
+    unwrapElement(code);
+    if (textNode?.nodeType === Node.TEXT_NODE && selection) {
+      const range = document.createRange();
+      range.selectNodeContents(textNode);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    return true;
+  }
+
+  function removeCodeBlock() {
+    const selection = window.getSelection();
+    const pre = closestWithin(selection?.anchorNode ?? null, "pre");
+    if (!pre) return false;
+    const paragraph = document.createElement("p");
+    const lines = (pre.innerText || pre.textContent || "").split("\n");
+    lines.forEach((line, index) => {
+      if (index > 0) paragraph.appendChild(document.createElement("br"));
+      paragraph.appendChild(document.createTextNode(line));
+    });
+    pre.replaceWith(paragraph);
+    if (selection) {
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    return true;
+  }
+
+  function adjustIndentation(direction: number) {
+    const selection = window.getSelection();
+    const block = closestWithin(
+      selection?.anchorNode ?? null,
+      "p,div,h1,h2,h3,li,blockquote"
+    ) ?? editorRef.current;
+    setBlockIndentation(block, direction);
+  }
+
+  function openLinkEditor() {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return;
+    savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+    const anchor = closestWithin(selection.anchorNode, "a") as HTMLAnchorElement | null;
+    linkAnchorRef.current = anchor;
+    setLinkEditing(Boolean(anchor));
+    setLinkUrl(anchor?.getAttribute("href") ?? "https://");
+    setLinkOpen(true);
+  }
+
   function applyVisualFormat(action: FormatAction) {
-    const el = editorRef.current;
-    if (!el) return;
-    el.focus();
-    document.execCommand("styleWithCSS", false, "false");
+    if (!prepareVisualEdit()) return;
+    const isAlignment = action.startsWith("align");
+    document.execCommand("styleWithCSS", false, isAlignment ? "true" : "false");
     const selected = window.getSelection()?.toString() ?? "";
 
     switch (action) {
@@ -630,6 +1217,9 @@ export function RichTextEditor({
       case "strikethrough":
         document.execCommand("strikeThrough");
         break;
+      case "underline":
+        document.execCommand("underline");
+        break;
       case "bullet":
         document.execCommand("insertUnorderedList");
         break;
@@ -639,19 +1229,41 @@ export function RichTextEditor({
       case "quote":
         document.execCommand("formatBlock", false, "blockquote");
         break;
-      case "link": {
-        const selection = window.getSelection();
-        savedRangeRef.current =
-          selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
-        setLinkUrl("https://");
-        setLinkOpen(true);
+      case "link":
+        openLinkEditor();
         return;
-      }
       case "code":
-        document.execCommand("insertHTML", false, `<code>${escapeHtml(selected || "code")}</code>`);
+        if (!removeInlineCode()) {
+          document.execCommand(
+            "insertHTML",
+            false,
+            `<code>${escapeHtml(selected || "code")}</code>`
+          );
+        }
         break;
       case "codeblock":
-        document.execCommand("formatBlock", false, "pre");
+        if (!removeCodeBlock()) document.execCommand("formatBlock", false, "pre");
+        break;
+      case "horizontalRule":
+        document.execCommand("insertHTML", false, "<hr><p><br></p>");
+        break;
+      case "alignLeft":
+        document.execCommand("justifyLeft");
+        break;
+      case "alignCenter":
+        document.execCommand("justifyCenter");
+        break;
+      case "alignRight":
+        document.execCommand("justifyRight");
+        break;
+      case "alignJustify":
+        document.execCommand("justifyFull");
+        break;
+      case "indent":
+        adjustIndentation(1);
+        break;
+      case "outdent":
+        adjustIndentation(-1);
         break;
       case "paragraph":
         document.execCommand("formatBlock", false, "p");
@@ -669,6 +1281,72 @@ export function RichTextEditor({
     syncFromEditor();
   }
 
+  function applyVisualStyle(action: StyleAction) {
+    if (!prepareVisualEdit()) return;
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection?.rangeCount) return;
+    const range = selection.getRangeAt(0).cloneRange();
+
+    const spans: HTMLSpanElement[] = [];
+    let node: Node | null = selection.anchorNode;
+    while (node && node !== editor) {
+      const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+      if (!element || !editor.contains(element)) break;
+      if (element.tagName.toLowerCase() === "span") spans.push(element as HTMLSpanElement);
+      node = element.parentElement;
+    }
+
+    const declarations: Record<string, string> = {};
+    for (const span of spans.reverse()) {
+      Object.assign(declarations, parseStyleDeclarations(span.getAttribute("style")));
+    }
+
+    const property =
+      action.type === "color"
+        ? "color"
+        : action.type === "fontSize"
+          ? "font-size"
+          : "font-family";
+    const isSame = declarations[property]?.toLowerCase() === action.value.toLowerCase();
+    if (isSame) delete declarations[property];
+    else declarations[property] = action.value;
+
+    const css = styleObjectToString(declarations);
+    const outerSpan = spans[0] ?? null;
+
+    if (outerSpan) {
+      const targetRange = document.createRange();
+      targetRange.selectNodeContents(outerSpan);
+      const contents = targetRange.extractContents();
+      flattenSpans(contents);
+
+      if (!css) {
+        outerSpan.replaceWith(contents);
+      } else {
+        const nextSpan = document.createElement("span");
+        nextSpan.setAttribute("style", css);
+        nextSpan.appendChild(contents);
+        outerSpan.replaceWith(nextSpan);
+        const nextRange = document.createRange();
+        nextRange.selectNodeContents(nextSpan);
+        selection.removeAllRanges();
+        selection.addRange(nextRange);
+      }
+    } else if (!range.collapsed && css) {
+      const nextSpan = document.createElement("span");
+      nextSpan.setAttribute("style", css);
+      nextSpan.appendChild(range.extractContents());
+      range.insertNode(nextSpan);
+      const nextRange = document.createRange();
+      nextRange.selectNodeContents(nextSpan);
+      selection.removeAllRanges();
+      selection.addRange(nextRange);
+    }
+
+    syncFromEditor();
+  }
+
   function applyFormat(action: FormatAction) {
     if (mode === "visual" && !preview && editorRef.current) {
       applyVisualFormat(action);
@@ -683,19 +1361,74 @@ export function RichTextEditor({
     focusSelection(result.selectionStart, result.selectionEnd);
   }
 
-  function applyLink() {
-    const el = editorRef.current;
+  function applyStyle(action: StyleAction) {
+    if (mode === "visual" && !preview && editorRef.current) {
+      applyVisualStyle(action);
+      return;
+    }
+    const el = ref.current;
+    if (!el) return;
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    const result = formatSelection(value, start, end, action);
+    setValue(result.next);
+    focusSelection(result.selectionStart, result.selectionEnd);
+  }
+
+  function applyHistory(action: HistoryAction) {
+    if (mode === "visual" && !preview && editorRef.current) {
+      if (!prepareVisualEdit()) return;
+      document.execCommand(action);
+      syncFromEditor();
+      return;
+    }
+    const el = ref.current;
     if (!el) return;
     el.focus();
-    if (savedRangeRef.current) {
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(savedRangeRef.current);
+    document.execCommand(action);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function insertSpecialCharacter(character: string) {
+    if (mode === "visual" && !preview) insertVisualText(character);
+    else insertText(character);
+  }
+
+  function applyLink() {
+    if (!prepareVisualEdit()) return;
+    const href = safeHref(linkUrl);
+    if (linkEditing && linkAnchorRef.current && editorRef.current?.contains(linkAnchorRef.current)) {
+      if (linkUrl.trim()) linkAnchorRef.current.setAttribute("href", href);
+      else unwrapElement(linkAnchorRef.current);
+    } else if (linkUrl.trim()) {
+      document.execCommand("createLink", false, href);
     }
-    if (linkUrl.trim()) document.execCommand("createLink", false, safeHref(linkUrl));
     savedRangeRef.current = null;
+    linkAnchorRef.current = null;
     setLinkOpen(false);
+    setLinkEditing(false);
     syncFromEditor();
+  }
+
+  function removeLink() {
+    if (!prepareVisualEdit()) return;
+    if (linkAnchorRef.current && editorRef.current?.contains(linkAnchorRef.current)) {
+      unwrapElement(linkAnchorRef.current);
+    } else {
+      document.execCommand("unlink");
+    }
+    savedRangeRef.current = null;
+    linkAnchorRef.current = null;
+    setLinkOpen(false);
+    setLinkEditing(false);
+    syncFromEditor();
+  }
+
+  function toggleFullscreen() {
+    const next = !fullscreen;
+    setFullscreen(next);
+    setAdvancedOpen(next);
+    setPreview(false);
   }
 
   async function uploadImage(file: File) {
@@ -709,8 +1442,7 @@ export function RichTextEditor({
       if (!res.ok) throw new Error(json.error ?? "Upload failed");
       const alt = file.name.replace(/\.[^.]+$/, "") || "image";
 
-      if (mode === "visual" && !preview && editorRef.current) {
-        editorRef.current.focus();
+      if (mode === "visual" && !preview && prepareVisualEdit()) {
         document.execCommand(
           "insertHTML",
           false,
@@ -736,8 +1468,18 @@ export function RichTextEditor({
         {label}
       </label>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-2 py-1.5">
+      <div
+        className={cn(
+          "flex flex-col overflow-hidden bg-white",
+          fullscreen
+            ? "fixed inset-0 z-50 rounded-none border-0 shadow-2xl"
+            : "rounded-xl border border-slate-200"
+        )}
+      >
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-2 py-1.5"
+          onMouseDown={saveEditorSelection}
+        >
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
@@ -757,69 +1499,122 @@ export function RichTextEditor({
               if (file) void uploadImage(file);
             }}
           />
-          <div className="flex items-center rounded-md border border-slate-200 bg-slate-100 p-0.5 text-[11px]">
+          <div className="flex items-center gap-1">
+            <div className="flex items-center rounded-md border border-slate-200 bg-slate-100 p-0.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("visual");
+                  setPreview(false);
+                }}
+                className={cn(
+                  "rounded px-2 py-0.5 font-medium transition",
+                  mode === "visual"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Visual
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("code");
+                  setPreview(false);
+                }}
+                className={cn(
+                  "rounded px-2 py-0.5 font-medium transition",
+                  mode === "code"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Code
+              </button>
+            </div>
             <button
               type="button"
-              onClick={() => {
-                setMode("visual");
-                setPreview(false);
-              }}
-              className={cn(
-                "rounded px-2 py-0.5 font-medium transition",
-                mode === "visual"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
-              )}
+              onClick={toggleFullscreen}
+              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="inline-flex size-7 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
             >
-              Visual
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode("code");
-                setPreview(false);
-              }}
-              className={cn(
-                "rounded px-2 py-0.5 font-medium transition",
-                mode === "code"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-800"
-              )}
-            >
-              Code
+              {fullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
             </button>
           </div>
         </div>
 
         {mode === "visual" ? (
           <>
-            <EditorToolbar
-              onFormat={applyFormat}
-              onInsertImage={() => fileRef.current?.click()}
-              onPreview={() => setPreview((p) => !p)}
-              mathEnabled={mathEnabled}
-              onMathToggle={() => setMathEnabled((enabled) => !enabled)}
-            />
+            <div
+              onMouseDown={() => {
+                saveEditorSelection();
+                toolbarInteractionRef.current = true;
+              }}
+              onMouseUp={() => {
+                toolbarInteractionRef.current = false;
+              }}
+              onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  toolbarInteractionRef.current = false;
+                }
+              }}
+            >
+              <EditorToolbar
+                onFormat={applyFormat}
+                onInsertImage={() => fileRef.current?.click()}
+                onPreview={() => setPreview((p) => !p)}
+                mathEnabled={mathEnabled}
+                onMathToggle={() => setMathEnabled((enabled) => !enabled)}
+                advancedOpen={advancedOpen}
+                onAdvancedToggle={() => {
+                  setPreview(false);
+                  setAdvancedOpen((open) => !open);
+                }}
+              />
+              {advancedOpen && (
+                <AdvancedToolbar
+                  onAction={applyFormat}
+                  onStyle={applyStyle}
+                  onSpecialCharacter={insertSpecialCharacter}
+                  onHistory={applyHistory}
+                />
+              )}
+            </div>
             {linkOpen && (
               <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-2 py-1.5">
+                <span className="text-[11px] font-semibold text-slate-500">
+                  {linkEditing ? "Edit link" : "Add link"}
+                </span>
                 <input
                   autoFocus
                   value={linkUrl}
                   onChange={(e) => setLinkUrl(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") applyLink();
-                    if (e.key === "Escape") setLinkOpen(false);
+                    if (e.key === "Escape") {
+                      setLinkOpen(false);
+                      linkAnchorRef.current = null;
+                    }
                   }}
                   placeholder="https://example.com"
                   aria-label="Link URL"
                   className="input h-7 min-w-48 flex-1 py-1 text-xs"
                 />
                 <button type="button" onClick={applyLink} className="btn-secondary btn-sm">
-                  Apply link
+                  {linkEditing ? "Update link" : "Add link"}
                 </button>
+                {linkEditing && (
+                  <button type="button" onClick={removeLink} className="btn-secondary btn-sm text-rose-600">
+                    Remove link
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setLinkOpen(false)}
+                  onClick={() => {
+                    setLinkOpen(false);
+                    linkAnchorRef.current = null;
+                  }}
                   className="btn-ghost btn-sm"
                 >
                   Cancel
@@ -828,6 +1623,7 @@ export function RichTextEditor({
             )}
             {mathEnabled && <MathToolbar onInsert={insertMath} compact />}
             <textarea
+              id={name}
               name={name}
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -836,7 +1632,7 @@ export function RichTextEditor({
               tabIndex={-1}
             />
             {showPreview ? (
-              <div className="min-h-48 bg-white p-4">
+              <div className={cn("min-h-48 bg-white p-4", fullscreen ? "flex-1 overflow-y-auto" : "max-h-[420px] overflow-y-auto")}>
                 {value.trim() ? (
                   <MathText content={value} />
                 ) : (
@@ -854,7 +1650,15 @@ export function RichTextEditor({
                 spellCheck
                 data-placeholder={placeholder}
                 onInput={syncFromEditor}
-                className="rich rich-editor min-h-48 bg-white px-4 py-3 focus:outline-none"
+                onKeyUp={saveEditorSelection}
+                onMouseUp={saveEditorSelection}
+                onBlur={saveEditorSelection}
+                className={cn(
+                  "rich rich-editor bg-white px-4 py-3 focus:outline-none",
+                  fullscreen
+                    ? "min-h-0 flex-1 overflow-y-auto"
+                    : "max-h-[420px] min-h-48 overflow-y-auto"
+                )}
               />
             )}
           </>
@@ -868,15 +1672,18 @@ export function RichTextEditor({
             placeholder={placeholder}
             rows={rows}
             required={required}
-            className="w-full resize-y border-0 bg-white px-4 py-3 font-mono text-xs leading-relaxed text-slate-800 placeholder:text-slate-400 focus:ring-0 focus:outline-none"
+            className={cn(
+              "w-full border-0 bg-white px-4 py-3 font-mono text-xs leading-relaxed text-slate-800 placeholder:text-slate-400 focus:ring-0 focus:outline-none",
+              fullscreen ? "min-h-0 flex-1 resize-none overflow-auto" : "resize-y"
+            )}
           />
         )}
       </div>
 
       {uploadError && <p className="mt-1.5 text-xs font-medium text-rose-600">{uploadError}</p>}
       <p className="mt-1.5 text-[11px] text-slate-400">
-        Visual mode shows formatted text while editing · Code mode shows the Markdown source · Math
-        is off until enabled
+        Visual mode shows formatted text while editing · Code mode shows the Markdown source · Use
+        More formatting or Fullscreen for advanced controls · Math is off until enabled
       </p>
     </div>
   );
