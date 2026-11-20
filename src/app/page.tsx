@@ -93,6 +93,15 @@ export default async function LandingPage({
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-20 bg-cover bg-center"
+          style={{ backgroundImage: "url('/hero-background.jpg')" }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-white/95 via-white/85 to-white/60"
+        />
+        <div
           className="pointer-events-none absolute inset-0 -z-10"
           style={{
             background:
@@ -100,7 +109,7 @@ export default async function LandingPage({
           }}
         />
         <div
-          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.35]"
+          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.25]"
           style={{
             backgroundImage:
               "linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)",
@@ -144,16 +153,6 @@ export default async function LandingPage({
           </div>
 
           <div className="relative mx-auto w-full max-w-[470px] lg:mx-0">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -inset-x-6 -inset-y-8 -z-10 overflow-hidden rounded-[2rem]"
-            >
-              <div
-                className="absolute inset-0 bg-cover bg-center opacity-35"
-                style={{ backgroundImage: "url('/hero-background.jpg')" }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-br from-white/70 via-white/30 to-brand-100/40" />
-            </div>
             <div className="absolute -top-5 -right-3 z-20 hidden rotate-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg sm:block">
               <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                 <Layers className="size-3 text-brand-600" /> 9 question types
