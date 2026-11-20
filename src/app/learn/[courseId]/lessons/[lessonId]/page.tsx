@@ -3,26 +3,21 @@ import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowUpRight,
   CheckCircle2,
   Clock,
   Code2,
-  Database,
   Download,
   FileText,
   GraduationCap,
-  Palette,
   Pencil,
-  Video,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { canTeach, requireTenant } from "@/lib/tenant";
 import { markLessonCompleteAction } from "@/lib/actions/course";
 import { SubmitButton } from "@/components/SubmitButton";
 import { MathText } from "@/components/MathText";
-import { LessonTypeBadge } from "@/components/LessonTypeBadge";
-import { LessonTypeToolkit } from "@/components/LessonTypeToolkit";
 import { LessonVideoEmbed, UploadedVideoPlayer } from "@/components/VideoPlayer";
-import { LESSON_TYPE_META, lessonTypeFrom } from "@/lib/lesson-types";
 import { formatBytes } from "@/lib/storage";
 import { parseVideoEmbed } from "@/lib/video-link";
 import { cn } from "@/lib/utils";
@@ -70,26 +65,6 @@ export default async function LearnLessonPage({
   const index = lesson.course.lessons.findIndex((l) => l.id === lesson.id);
   const previous = index > 0 ? lesson.course.lessons[index - 1] : null;
   const next = index >= 0 && index < lesson.course.lessons.length - 1 ? lesson.course.lessons[index + 1] : null;
-  const lessonType = lessonTypeFrom(lesson.lessonType);
-  const typeMeta = LESSON_TYPE_META[lessonType];
-  const referenceLabel =
-    lessonType === "CODE"
-      ? "Open coding reference"
-      : lessonType === "VISUAL"
-        ? "Open design reference"
-        : lessonType === "MATH"
-          ? "Open worked solution"
-          : lessonType === "DATA_SCIENCE"
-            ? "Open notebook or dataset"
-            : "Open lesson link";
-  const ReferenceIcon =
-    lessonType === "CODE"
-      ? Code2
-      : lessonType === "VISUAL"
-        ? Palette
-        : lessonType === "DATA_SCIENCE"
-          ? Database
-          : Video;
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -120,7 +95,6 @@ export default async function LearnLessonPage({
           <span className="badge bg-brand-50 text-brand-700">
             Lesson {index + 1} of {lesson.course.lessons.length}
           </span>
-          <LessonTypeBadge type={lesson.lessonType} />
           {completion && (
             <span className="badge bg-emerald-50 text-emerald-700">
               <CheckCircle2 className="mr-1 size-3" /> Completed
@@ -142,7 +116,7 @@ export default async function LearnLessonPage({
               rel="noopener noreferrer"
               className="mt-4 flex items-center gap-2 rounded-2xl border border-brand-200 bg-brand-50/70 px-4 py-3 text-sm font-semibold text-brand-800 hover:bg-brand-50"
             >
-              <ReferenceIcon className="size-4" /> {referenceLabel}
+              <ArrowUpRight className="size-4" /> Open lesson link
             </a>
           )
         )}
@@ -169,29 +143,26 @@ export default async function LearnLessonPage({
         <article className="card mt-5 overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3 sm:px-8">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              {typeMeta.editorLabel}
+              Lesson content
             </h2>
-            <LessonTypeBadge type={lesson.lessonType} compact className="sm:hidden" />
           </div>
           <div className="px-5 py-6 sm:px-8 sm:py-8">
             {lesson.content ? (
               <MathText content={lesson.content} />
             ) : (
               <p className="text-sm italic text-slate-400">
-                No {typeMeta.editorLabel.toLowerCase()} has been added yet.
+                No lesson content has been added yet.
               </p>
             )}
           </div>
         </article>
-
-        <LessonTypeToolkit type={lesson.lessonType} className="mt-4" />
 
         {lesson.attachments.some((file) => file.kind !== "video") && (
           <section className="card mt-5 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
               <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                 <FileText className="size-3.5" />
-                {lessonType === "VISUAL" ? "Design assets" : "Lesson files"}
+                Lesson files
               </h2>
               <span className="text-[11px] text-slate-400">
                 {lesson.attachments.filter((file) => file.kind !== "video").length}

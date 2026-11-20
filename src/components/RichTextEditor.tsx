@@ -1,7 +1,19 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Eye, Pencil, Sigma } from "lucide-react";
+import {
+  Bold,
+  Code2,
+  Eye,
+  Heading2,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  Pencil,
+  Quote,
+  Sigma,
+} from "lucide-react";
 import { MathText } from "@/components/MathText";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +30,136 @@ const SNIPPETS: { label: string; value: string }[] = [
   { label: "∫", value: "\\int_{a}^{b}" },
   { label: "lim", value: "\\lim_{x \\to 0}" },
 ];
+
+export type FormatAction =
+  | "bold"
+  | "italic"
+  | "heading"
+  | "bullet"
+  | "number"
+  | "quote"
+  | "link"
+  | "code"
+  | "codeblock";
+
+type FormatResult = {
+  next: string;
+  selectionStart: number;
+  selectionEnd: number;
+};
+
+/**
+ * Apply a Markdown formatting action to a textarea selection. Shared by the
+ * lesson editor and the question builder so both write the same syntax.
+ */
+export function formatSelection(
+  value: string,
+  start: number,
+  end: number,
+  action: FormatAction
+): FormatResult {
+  const selected = value.slice(start, end);
+
+  function wrap(before: string, after: string, fallback: string): FormatResult {
+    const text = selected || fallback;
+    return {
+      next: value.slice(0, start) + before + text + after + value.slice(end),
+      selectionStart: start + before.length,
+      selectionEnd: start + before.length + text.length,
+    };
+  }
+
+  function prefixLines(prefix: string): FormatResult {
+    const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+    const nextBreak = value.indexOf("\n", end);
+    const lineEnd = nextBreak === -1 ? value.length : nextBreak;
+    const block = value.slice(lineStart, lineEnd);
+    const prefixed = block
+      .split("\n")
+      .map((line) => prefix + line)
+      .join("\n");
+    return {
+      next: value.slice(0, lineStart) + prefixed + value.slice(lineEnd),
+      selectionStart: lineStart,
+      selectionEnd: lineStart + prefixed.length,
+    };
+  }
+
+  switch (action) {
+    case "bold":
+      return wrap("**", "**", "bold text");
+    case "italic":
+      return wrap("*", "*", "italic text");
+    case "heading":
+      return prefixLines("## ");
+    case "bullet":
+      return prefixLines("- ");
+    case "number":
+      return prefixLines("1. ");
+    case "quote":
+      return prefixLines("> ");
+    case "link": {
+      const text = selected || "link text";
+      const before = `[${text}](`;
+      const after = ")";
+      const urlStart = start + before.length;
+      return {
+        next: value.slice(0, start) + before + "https://" + after + value.slice(end),
+        selectionStart: urlStart,
+        selectionEnd: urlStart + "https://".length,
+      };
+    }
+    case "code":
+      return wrap("`", "`", "code");
+    case "codeblock":
+      return wrap("```\n", "\n```", "code");
+  }
+}
+
+const FORMAT_BUTTONS: {
+  action: FormatAction;
+  label: string;
+  title: string;
+  icon: typeof Bold;
+}[] = [
+  { action: "bold", label: "Bold", title: "Bold (**text**)", icon: Bold },
+  { action: "italic", label: "Italic", title: "Italic (*text*)", icon: Italic },
+  { action: "heading", label: "Heading", title: "Heading (## text)", icon: Heading2 },
+  { action: "bullet", label: "Bulleted list", title: "Bulleted list (- item)", icon: List },
+  { action: "number", label: "Numbered list", title: "Numbered list (1. item)", icon: ListOrdered },
+  { action: "quote", label: "Quote", title: "Quote (> text)", icon: Quote },
+  { action: "link", label: "Link", title: "Link ([text](url))", icon: Link2 },
+  { action: "code", label: "Inline code", title: "Inline code (`code`)", icon: Code2 },
+  { action: "codeblock", label: "Code block", title: "Code block (```code```)", icon: Code2 },
+];
+
+export function TextFormatToolbar({
+  onFormat,
+  compact = false,
+}: {
+  onFormat: (action: FormatAction) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {FORMAT_BUTTONS.map(({ action, label, title, icon: Icon }) => (
+        <button
+          key={action}
+          type="button"
+          onClick={() => onFormat(action)}
+          title={title}
+          aria-label={label}
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700",
+            compact ? "size-6" : "size-7"
+          )}
+        >
+          <Icon className={compact ? "size-3" : "size-3.5"} />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function MathToolbar({
   onInsert,
@@ -75,11 +217,10 @@ export function setFormFieldValue(name: string, value: string) {
 export function RichTextEditor({
   name,
   defaultValue = "",
-  placeholder = "Write your content. Use $...$ for inline math and $$...$$ for display math.",
+  placeholder = "Write your content with Markdown formatting.",
   rows = 8,
   required = false,
   label = "Content",
-  toolbar = true,
 }: {
   name: string;
   defaultValue?: string;
@@ -87,25 +228,39 @@ export function RichTextEditor({
   rows?: number;
   required?: boolean;
   label?: string;
-  toolbar?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState(defaultValue);
   const [mode, setMode] = useState<"write" | "preview">("write");
+  const [mathEnabled, setMathEnabled] = useState(false);
 
-  function insert(snippet: string) {
+  function focusSelection(selectionStart: number, selectionEnd: number) {
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(selectionStart, selectionEnd);
+    });
+  }
+
+  function insertMath(snippet: string) {
     const el = ref.current;
     if (!el) return;
     const start = el.selectionStart ?? value.length;
     const end = el.selectionEnd ?? value.length;
-    const wrapped = snippet.includes("{") && /[a-z]/i.test(snippet) ? snippet : snippet;
-    const next = value.slice(0, start) + wrapped + value.slice(end);
+    const next = value.slice(0, start) + snippet + value.slice(end);
     setValue(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      const caret = start + wrapped.length;
-      el.setSelectionRange(caret, caret);
-    });
+    focusSelection(start + snippet.length, start + snippet.length);
+  }
+
+  function applyFormat(action: FormatAction) {
+    const el = ref.current;
+    if (!el) return;
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    const result = formatSelection(value, start, end, action);
+    setValue(result.next);
+    focusSelection(result.selectionStart, result.selectionEnd);
   }
 
   return (
@@ -140,11 +295,37 @@ export function RichTextEditor({
 
       {mode === "write" ? (
         <>
-          {toolbar && (
-            <div className="mb-1.5 rounded-xl border border-slate-200 bg-slate-50/70 p-1.5">
-              <MathToolbar onInsert={insert} compact />
+          <div className="mb-1.5 rounded-xl border border-slate-200 bg-slate-50/70 p-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Format
+              </span>
+              <TextFormatToolbar onFormat={applyFormat} compact />
+              <span className="mx-0.5 hidden h-4 w-px bg-slate-200 sm:block" />
+              <button
+                type="button"
+                onClick={() => setMathEnabled((enabled) => !enabled)}
+                aria-pressed={mathEnabled}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition",
+                  mathEnabled
+                    ? "border-brand-300 bg-brand-50 text-brand-700"
+                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                )}
+              >
+                <Sigma className="size-3" /> Math
+              </button>
             </div>
-          )}
+            {mathEnabled && (
+              <div className="mt-1.5 border-t border-slate-200 pt-1.5">
+                <MathToolbar onInsert={insertMath} compact />
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Inline <code className="rounded bg-slate-100 px-1">$x^2$</code> · Display{" "}
+                  <code className="rounded bg-slate-100 px-1">$$...$$</code>
+                </p>
+              </div>
+            )}
+          </div>
           <textarea
             ref={ref}
             id={name}
@@ -170,8 +351,7 @@ export function RichTextEditor({
         </>
       )}
       <p className="mt-1.5 text-[11px] text-slate-400">
-        Markdown supported · <code className="rounded bg-slate-100 px-1">$x^2$</code> inline ·{" "}
-        <code className="rounded bg-slate-100 px-1">$$∫$$</code> display
+        Markdown supported · turn on Math for LaTeX snippets
       </p>
     </div>
   );

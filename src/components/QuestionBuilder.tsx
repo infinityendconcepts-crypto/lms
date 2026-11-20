@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Eye, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Eye, Pencil, Plus, Sigma, Sparkles, Trash2 } from "lucide-react";
 import { saveQuestionAction } from "@/lib/actions/assessment";
 import {
   emptyData,
@@ -17,7 +17,12 @@ import {
 import { MathText } from "@/components/MathText";
 import { UploadField } from "@/components/UploadField";
 import { SubmitButton } from "@/components/SubmitButton";
-import { MathToolbar } from "@/components/RichTextEditor";
+import {
+  MathToolbar,
+  TextFormatToolbar,
+  formatSelection,
+  type FormatAction,
+} from "@/components/RichTextEditor";
 import { cn } from "@/lib/utils";
 
 type Dict = QuestionDataShape;
@@ -50,7 +55,27 @@ function ControlledMathEditor({
   hint?: string;
 }) {
   const [preview, setPreview] = useState(false);
+  const [mathEnabled, setMathEnabled] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+
+  function focusSelection(selectionStart: number, selectionEnd: number) {
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(selectionStart, selectionEnd);
+    });
+  }
+
+  function applyFormat(action: FormatAction) {
+    const el = ref.current;
+    if (!el) return;
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    const result = formatSelection(value, start, end, action);
+    onChange(result.next);
+    focusSelection(result.selectionStart, result.selectionEnd);
+  }
 
   function insert(snippet: string) {
     const el = ref.current;
@@ -93,7 +118,27 @@ function ControlledMathEditor({
       ) : (
         <>
           <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50/70 p-1.5">
-            <MathToolbar onInsert={insert} compact />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <TextFormatToolbar onFormat={applyFormat} compact />
+              <button
+                type="button"
+                onClick={() => setMathEnabled((enabled) => !enabled)}
+                aria-pressed={mathEnabled}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold transition",
+                  mathEnabled
+                    ? "border-brand-300 bg-brand-50 text-brand-700"
+                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                )}
+              >
+                <Sigma className="size-3" /> Math
+              </button>
+            </div>
+            {mathEnabled && (
+              <div className="mt-1.5 border-t border-slate-200 pt-1.5">
+                <MathToolbar onInsert={insert} compact />
+              </div>
+            )}
           </div>
           <textarea
             ref={ref}

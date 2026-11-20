@@ -19,12 +19,10 @@ import { deleteLessonAction, updateLessonAction } from "@/lib/actions/course";
 import { deleteAttachmentAction } from "@/lib/actions/course";
 import { Badge, StatusBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { LessonTypeBadge, LessonTypeIcon } from "@/components/LessonTypeBadge";
-import { LessonTypeFields } from "@/components/dashboard/LessonTypeFields";
+import { LessonContentFields } from "@/components/dashboard/LessonContentFields";
 import { UploadField } from "@/components/UploadField";
 import { MathText } from "@/components/MathText";
 import { AiContentAssist } from "@/components/ai/AiContentAssist";
-import { LESSON_TYPE_META, lessonTypeFrom } from "@/lib/lesson-types";
 import { providerOptions } from "@/lib/ai/benchmark";
 import { formatBytes } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
@@ -63,8 +61,6 @@ export default async function LessonEditorPage({
   const index = lesson.course.lessons.findIndex((l) => l.id === lesson.id);
   const previous = index > 0 ? lesson.course.lessons[index - 1] : null;
   const next = index >= 0 ? lesson.course.lessons[index + 1] : null;
-  const lessonType = lessonTypeFrom(lesson.lessonType);
-  const typeMeta = LESSON_TYPE_META[lessonType];
   const aiProviders = await providerOptions(ctx.tenant.id);
 
   return (
@@ -100,7 +96,6 @@ export default async function LessonEditorPage({
             <Badge tone={lesson.published ? "green" : "slate"}>
               {lesson.published ? "Published" : "Draft"}
             </Badge>
-            <LessonTypeBadge type={lesson.lessonType} />
             <Badge>
               Lesson {index + 1} of {lesson.course.lessons.length}
             </Badge>
@@ -174,8 +169,7 @@ export default async function LessonEditorPage({
             </div>
 
             <div className="border-t border-slate-100 pt-4">
-              <LessonTypeFields
-                initialType={lesson.lessonType}
+              <LessonContentFields
                 content={lesson.content}
                 meetingUrl={lesson.meetingUrl}
                 codePadId={lesson.codePadId}
@@ -286,7 +280,7 @@ export default async function LessonEditorPage({
           />
 
           <div className="card p-5">
-            <h2 className="text-sm font-bold text-slate-900">{typeMeta.editorLabel} preview</h2>
+            <h2 className="text-sm font-bold text-slate-900">Lesson content preview</h2>
             <p className="mt-1 text-[11px] text-slate-500">
               Exactly what learners see, with math and formatting rendered.
             </p>
@@ -317,10 +311,6 @@ export default async function LessonEditorPage({
                     <span className="w-4 text-[10px] font-bold text-slate-400">
                       {String(i + 1).padStart(2, "0")}
                     </span>
-                    <LessonTypeIcon
-                      type={item.lessonType}
-                      className="size-3 shrink-0 text-slate-400"
-                    />
                     <span className="min-w-0 flex-1 truncate">{item.title}</span>
                     <StatusBadge status={item.published ? "PUBLISHED" : "DRAFT"} />
                   </Link>
@@ -337,10 +327,6 @@ export default async function LessonEditorPage({
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-400">Position</dt>
                 <dd className="font-medium text-slate-700">{index + 1}</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-slate-400">Type</dt>
-                <dd className="font-medium text-slate-700">{typeMeta.label}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-400">Created</dt>

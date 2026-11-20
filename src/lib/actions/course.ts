@@ -7,7 +7,6 @@ import { requireTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { getPlanState } from "@/lib/usage";
 import { removeUpload } from "@/lib/storage";
-import { lessonTypeFrom } from "@/lib/lesson-types";
 
 async function courseInTenant(courseId: string, tenantId: string) {
   const course = await db.course.findFirst({ where: { id: courseId, tenantId } });
@@ -18,15 +17,12 @@ async function courseInTenant(courseId: string, tenantId: string) {
 async function lessonCodePadId({
   courseId,
   tenantId,
-  lessonTypeValue,
   formData,
 }: {
   courseId: string;
   tenantId: string;
-  lessonTypeValue: string;
   formData: FormData;
 }) {
-  if (lessonTypeValue !== "CODE") return null;
   const codePadId = String(formData.get("codePadId") ?? "").trim();
   if (!codePadId) return null;
   const pad = await db.codePad.findFirst({ where: { id: codePadId, courseId, tenantId } });
@@ -128,11 +124,9 @@ export async function createLessonAction(formData: FormData) {
   const courseId = String(formData.get("courseId") ?? "");
   await courseInTenant(courseId, ctx.tenant.id);
   const title = String(formData.get("title") ?? "").trim() || "Untitled lesson";
-  const lessonTypeValue = lessonTypeFrom(String(formData.get("lessonType") ?? ""));
   const codePadId = await lessonCodePadId({
     courseId,
     tenantId: ctx.tenant.id,
-    lessonTypeValue,
     formData,
   });
   const last = await db.lesson.findFirst({
@@ -145,7 +139,6 @@ export async function createLessonAction(formData: FormData) {
     data: {
       courseId,
       title,
-      lessonType: lessonTypeValue,
       codePadId,
       order: (last?.order ?? 0) + 1,
       summary: String(formData.get("summary") ?? "").trim() || null,
@@ -163,11 +156,9 @@ export async function updateLessonAction(formData: FormData) {
     include: { course: true },
   });
   if (!lesson || lesson.course.tenantId !== ctx.tenant.id) throw new Error("Lesson not found");
-  const lessonTypeValue = lessonTypeFrom(String(formData.get("lessonType") ?? ""));
   const codePadId = await lessonCodePadId({
     courseId: lesson.courseId,
     tenantId: ctx.tenant.id,
-    lessonTypeValue,
     formData,
   });
 
@@ -177,7 +168,6 @@ export async function updateLessonAction(formData: FormData) {
       title: String(formData.get("title") ?? "").trim() || "Untitled lesson",
       summary: String(formData.get("summary") ?? "").trim() || null,
       content: String(formData.get("content") ?? ""),
-      lessonType: lessonTypeValue,
       codePadId,
       estimatedMinutes: Math.max(1, Number(formData.get("estimatedMinutes") ?? 15) || 15),
       meetingUrl: String(formData.get("meetingUrl") ?? "").trim() || null,

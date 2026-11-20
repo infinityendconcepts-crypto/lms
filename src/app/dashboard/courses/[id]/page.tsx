@@ -68,18 +68,9 @@ import { Avatar, Badge, EmptyState, Progress, StatusBadge, Tabs } from "@/compon
 import { SubmitButton } from "@/components/SubmitButton";
 import { CoursePlanBoard, type PlanTaskView } from "@/components/CoursePlanBoard";
 import { UploadField } from "@/components/UploadField";
-import { LessonTypeBadge, LessonTypeIcon } from "@/components/LessonTypeBadge";
-import { LessonTypeFields } from "@/components/dashboard/LessonTypeFields";
-import {
-  LESSON_TYPES,
-  LESSON_TYPE_META,
-  isLessonType,
-  lessonTypeFrom,
-  type LessonType,
-} from "@/lib/lesson-types";
 import { formatBytes } from "@/lib/storage";
 import { currencyFor } from "@/lib/plans";
-import { cn, formatDate, formatMoney, nowMs } from "@/lib/utils";
+import { formatDate, formatMoney, nowMs } from "@/lib/utils";
 
 export const metadata = { title: "Course" };
 
@@ -97,7 +88,6 @@ export default async function CourseDetailPage({
     saved?: string;
     error?: string;
     enrolled?: string;
-    lessonType?: string;
   }>;
 }) {
   const { id } = await params;
@@ -161,23 +151,6 @@ export default async function CourseDetailPage({
   });
 
   const tab = sp.tab ?? "content";
-  const selectedLessonType: LessonType | "ALL" =
-    sp.lessonType === "ALL" ? "ALL" : isLessonType(sp.lessonType) ? sp.lessonType : "ALL";
-  const lessonTypeCounts = LESSON_TYPES.reduce<Record<LessonType, number>>(
-    (counts, type) => {
-      counts[type] = course.lessons.filter((lesson) => lessonTypeFrom(lesson.lessonType) === type).length;
-      return counts;
-    },
-    Object.fromEntries(LESSON_TYPES.map((type) => [type, 0])) as Record<LessonType, number>
-  );
-  const visibleLessons = course.lessons
-    .map((lesson, index) => ({ lesson, index }))
-    .filter(
-      ({ lesson }) =>
-        selectedLessonType === "ALL" || lessonTypeFrom(lesson.lessonType) === selectedLessonType
-    );
-  const lessonTypeHref = (value: LessonType | "ALL") =>
-    `/dashboard/courses/${course.id}?tab=content&lessonType=${value}`;
   const documents = course.attachments.filter((a) => !a.lessonId);
   const avgProgress = course.enrollments.length
     ? Math.round(
@@ -397,62 +370,23 @@ export default async function CourseDetailPage({
               <div>
                 <h2 className="text-sm font-bold text-slate-900">Lessons</h2>
                 <p className="mt-0.5 text-[10px] text-slate-400">
-                  Choose a type to focus the learning path.
+                  Build the learning path in order.
                 </p>
               </div>
-              <span className="text-[11px] text-slate-400">
-                {visibleLessons.length} of {course.lessons.length}
-              </span>
+              <span className="text-[11px] text-slate-400">{course.lessons.length} lessons</span>
             </div>
 
-            <div className="thin-scroll flex gap-1.5 overflow-x-auto border-b border-slate-100 px-5 py-3 sm:flex-wrap sm:overflow-visible">
-              <Link
-                href={lessonTypeHref("ALL")}
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
-                  selectedLessonType === "ALL"
-                    ? "bg-brand-600 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                )}
-              >
-                All <span className="opacity-70">{course.lessons.length}</span>
-              </Link>
-              {LESSON_TYPES.map((type) => {
-                const active = selectedLessonType === type;
-                return (
-                  <Link
-                    key={type}
-                    href={lessonTypeHref(type)}
-                    className={cn(
-                      "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
-                      active
-                        ? "bg-brand-600 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    )}
-                  >
-                    <LessonTypeIcon type={type} className="size-3" />
-                    {LESSON_TYPE_META[type].label}
-                    <span className="opacity-70">{lessonTypeCounts[type]}</span>
-                  </Link>
-                );
-              })}
-            </div>
-
-            {visibleLessons.length === 0 ? (
+            {course.lessons.length === 0 ? (
               <div className="p-5">
                 <EmptyState
                   icon={<BookOpen className="size-5" />}
-                  title={
-                    selectedLessonType === "ALL"
-                      ? "No lessons yet"
-                      : `No ${LESSON_TYPE_META[selectedLessonType].label} lessons`
-                  }
-                  description="Add a lesson and choose its type to organize the learning path."
+                  title="No lessons yet"
+                  description="Add a lesson to start the learning path."
                 />
               </div>
             ) : (
               <ol className="divide-y divide-slate-100">
-                {visibleLessons.map(({ lesson, index }) => (
+                {course.lessons.map((lesson, index) => (
                   <li key={lesson.id}>
                     <Link
                       href={`/dashboard/lessons/${lesson.id}`}
@@ -469,11 +403,6 @@ export default async function CourseDetailPage({
                           {lesson.summary || "No summary"} · {lesson.estimatedMinutes} min
                         </p>
                       </div>
-                      <LessonTypeBadge
-                        type={lesson.lessonType}
-                        compact
-                        className="hidden sm:inline-flex"
-                      />
                       <Badge tone={lesson.published ? "green" : "slate"}>
                         {lesson.published ? "Published" : "Draft"}
                       </Badge>
@@ -498,7 +427,6 @@ export default async function CourseDetailPage({
                   className="input bg-white"
                 />
               </div>
-              <LessonTypeFields compact />
               <div className="flex flex-col sm:flex-row sm:justify-end">
                 <SubmitButton className="w-full sm:w-auto" pendingText="Adding…">
                   <Plus className="size-3.5" /> Add lesson
