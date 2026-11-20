@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "katex/dist/katex.min.css";
 import "./globals.css";
+import { SystemRibbon } from "@/components/SystemRibbon";
+import { getSystemRibbon } from "@/lib/system-ribbon";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,13 +25,17 @@ export const metadata: Metadata = {
   keywords: ["LMS", "learning management system", "math", "LaTeX", "multi-tenant", "SaaS"],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const systemRibbon = await getSystemRibbon();
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <SystemRibbon ribbon={systemRibbon} />
+        {children}
+      </body>
     </html>
   );
 }

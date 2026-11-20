@@ -489,3 +489,37 @@ export async function deletePromoCodeAction(formData: FormData) {
   revalidatePath("/admin");
   redirect("/admin?saved=Promo+deleted");
 }
+
+export async function saveSystemRibbonAction(formData: FormData) {
+  const session = await requireSuperAdmin();
+  const enabled = formData.get("enabled") === "on";
+  const message = String(formData.get("message") ?? "").trim().slice(0, 500);
+  const toneRaw = String(formData.get("tone") ?? "info");
+  const tone = toneRaw === "warning" || toneRaw === "success" ? toneRaw : "info";
+  const linkLabel = String(formData.get("linkLabel") ?? "").trim().slice(0, 80);
+  const linkHref = String(formData.get("linkHref") ?? "").trim().slice(0, 500);
+
+  const value = JSON.stringify({
+    enabled: enabled && message.length > 0,
+    message,
+    tone,
+    ...(linkLabel ? { linkLabel } : {}),
+    ...(linkHref ? { linkHref } : {}),
+  });
+
+  await db.platformSetting.upsert({
+    where: { key: "system_ribbon" },
+    create: { key: "system_ribbon", value },
+    update: { value },
+  });
+  await audit({
+    actorId: session.user.id,
+    action: enabled && message ? "admin.system_ribbon.updated" : "admin.system_ribbon.cleared",
+    target: "system_ribbon",
+    meta: { enabled: enabled && message.length > 0, tone },
+  });
+  revalidatePath("/");
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  redirect(enabled && message ? "/admin?saved=System+update+ribbon+saved" : "/admin?saved=System+update+ribbon+cleared");
+}

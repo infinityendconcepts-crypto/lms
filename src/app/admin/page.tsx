@@ -26,6 +26,7 @@ import {
   deletePromoCodeAction,
   extendTrialAction,
   savePlanDefinitionsAction,
+  saveSystemRibbonAction,
   togglePromoCodeAction,
   toggleSuperAdminAction,
   toggleTenantSuspendedAction,
@@ -47,6 +48,7 @@ import {
   trialDaysLeft,
 } from "@/lib/plans";
 import { getPlanCatalog } from "@/lib/plan-catalog";
+import { getSystemRibbon } from "@/lib/system-ribbon";
 import { formatDate, formatMoney, timeAgo } from "@/lib/utils";
 
 export const metadata = { title: "Platform admin" };
@@ -72,6 +74,7 @@ export default async function AdminPage({
     outbox,
     planCatalog,
     promos,
+    systemRibbon,
   ] = await Promise.all([
     db.tenant.findMany({
       include: {
@@ -109,6 +112,7 @@ export default async function AdminPage({
       include: { _count: { select: { redemptions: true } } },
       orderBy: { createdAt: "desc" },
     }),
+    getSystemRibbon(),
   ]);
   const plans = Object.values(planCatalog);
 
@@ -796,6 +800,81 @@ export default async function AdminPage({
                 ))}
                 <SubmitButton pendingText="Saving plans…">Save plan definitions</SubmitButton>
               </form>
+            </details>
+
+            <details className="card overflow-hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 text-xs font-bold text-slate-800 [&::-webkit-details-marker]:hidden">
+                <span>System update ribbon</span>
+                <span className="text-[10px] font-normal text-slate-400">
+                  {systemRibbon.enabled ? "Visible site-wide" : "Hidden"}
+                </span>
+              </summary>
+              <div className="border-t border-slate-100 p-5">
+                <form action={saveSystemRibbonAction} className="space-y-4">
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <input
+                      type="checkbox"
+                      name="enabled"
+                      defaultChecked={systemRibbon.enabled}
+                      className="size-4 rounded border-slate-300"
+                    />
+                    Show ribbon on top for system updates
+                  </label>
+                  <div>
+                    <label className="label" htmlFor="ribbon-message">
+                      Message
+                    </label>
+                    <textarea
+                      id="ribbon-message"
+                      name="message"
+                      rows={3}
+                      defaultValue={systemRibbon.message}
+                      placeholder="e.g. Scheduled maintenance tonight 22:00–23:00 UTC. Some features may be briefly unavailable."
+                      className="textarea"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Displayed at the top of the app when enabled. Leave empty or uncheck to hide.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className="label" htmlFor="ribbon-tone">
+                        Style
+                      </label>
+                      <select id="ribbon-tone" name="tone" defaultValue={systemRibbon.tone} className="select">
+                        <option value="info">Info (brand)</option>
+                        <option value="warning">Warning</option>
+                        <option value="success">Success</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="ribbon-link-label">
+                        Link label (optional)
+                      </label>
+                      <input
+                        id="ribbon-link-label"
+                        name="linkLabel"
+                        defaultValue={systemRibbon.linkLabel ?? ""}
+                        placeholder="Learn more"
+                        className="input"
+                      />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="ribbon-link-href">
+                        Link URL (optional)
+                      </label>
+                      <input
+                        id="ribbon-link-href"
+                        name="linkHref"
+                        defaultValue={systemRibbon.linkHref ?? ""}
+                        placeholder="/dashboard/notifications or https://…"
+                        className="input"
+                      />
+                    </div>
+                  </div>
+                  <SubmitButton pendingText="Saving ribbon…">Save system ribbon</SubmitButton>
+                </form>
+              </div>
             </details>
 
             <details className="card overflow-hidden" open={promos.length === 0}>
