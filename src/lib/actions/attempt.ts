@@ -39,7 +39,8 @@ export async function startAttemptAction(formData: FormData) {
   }
 
   const existing = await db.attempt.findFirst({
-    where: { assessmentId, studentId: ctx.user.id, status: "IN_PROGRESS" },
+    where: { assessmentId, studentId: ctx.user.id, status: { in: ["IN_PROGRESS", "RETURNED"] } },
+    orderBy: { startedAt: "desc" },
   });
   if (existing) redirect(`/attempt/${existing.id}`);
 
@@ -91,8 +92,8 @@ export async function saveAnswerAction(input: {
     include: { assessment: true, answers: true },
   });
   if (!attempt) return { ok: false, error: "Attempt not found" };
-  if (attempt.status !== "IN_PROGRESS") return { ok: false, error: "Attempt already submitted" };
-  if (isAttemptExpired(attempt)) return { ok: false, expired: true };
+  if (!["IN_PROGRESS", "RETURNED"].includes(attempt.status)) return { ok: false, error: "Attempt already submitted" };
+  if (isAttemptExpired({ ...attempt, status: attempt.status })) return { ok: false, expired: true };
 
   const answer = attempt.answers.find((a) => a.questionId === input.questionId);
   if (!answer) return { ok: false, error: "Question not in this attempt" };
@@ -114,11 +115,19 @@ export async function submitAttemptAction(formData: FormData) {
   });
   if (!attempt) redirect("/dashboard");
 
-  if (attempt.status === "IN_PROGRESS") {
+  if (["IN_PROGRESS", "RETURNED"].includes(attempt.status)) {
     const spent = Math.max(0, Math.round((Date.now() - attempt.startedAt.getTime()) / 1000));
     await db.attempt.update({
       where: { id: attemptId },
-      data: { status: "SUBMITTED", submittedAt: new Date(), timeSpentSec: spent },
+      data: {
+        status: "SUBMITTED",
+        submittedAt: new Date(),
+        timeSpentSec: Math.max(attempt.timeSpentSec, spent),
+        returnedAt: null,
+        returnNote: null,
+        gradedAt: null,
+        gradedById: null,
+      },
     });
     await autoGradeAttempt(attemptId);
     await audit({
@@ -138,12 +147,20 @@ export async function autoSubmitAttemptAction(attemptId: string) {
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, studentId: ctx.user.id, tenantId: ctx.tenant.id },
   });
-  if (!attempt || attempt.status !== "IN_PROGRESS") return { ok: false };
+  if (!attempt || !["IN_PROGRESS", "RETURNED"].includes(attempt.status)) return { ok: false };
 
   const spent = Math.max(0, Math.round((Date.now() - attempt.startedAt.getTime()) / 1000));
   await db.attempt.update({
     where: { id: attemptId },
-    data: { status: "SUBMITTED", submittedAt: new Date(), timeSpentSec: spent },
+    data: {
+      status: "SUBMITTED",
+      submittedAt: new Date(),
+      timeSpentSec: Math.max(attempt.timeSpentSec, spent),
+      returnedAt: null,
+      returnNote: null,
+      gradedAt: null,
+      gradedById: null,
+    },
   });
   await autoGradeAttempt(attemptId);
   return { ok: true };

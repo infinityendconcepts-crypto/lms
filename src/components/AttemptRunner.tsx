@@ -71,6 +71,7 @@ export function AttemptRunner({
   timeLimitMin,
   startedAt,
   passScore,
+  returnNote,
 }: {
   attemptId: string;
   assessmentTitle: string;
@@ -81,6 +82,7 @@ export function AttemptRunner({
   timeLimitMin: number | null;
   startedAt: number;
   passScore: number;
+  returnNote?: string | null;
 }) {
   const router = useRouter();
   const [responses, setResponses] = useState<Responses>(initialResponses);
@@ -280,6 +282,15 @@ export function AttemptRunner({
 
       <div className="mx-auto grid max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_260px]">
         <main>
+          {returnNote ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-bold uppercase tracking-wider text-[10px] text-amber-800">Returned by teacher — comments & instructions</p>
+              <MathText content={returnNote} className="mt-1 text-sm leading-6 text-amber-900" />
+              <p className="mt-2 text-[11px] text-amber-800/80">
+                Review the feedback, update your answers, and submit again when ready.
+              </p>
+            </div>
+          ) : null}
           {instructions && current === 0 && (
             <div className="mb-4 rounded-2xl border border-brand-200 bg-brand-50/70 px-4 py-3 text-xs leading-5 text-brand-900">
               <p className="font-bold uppercase tracking-wider">Instructions</p>

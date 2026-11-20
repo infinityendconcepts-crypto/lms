@@ -25,12 +25,12 @@ export default async function AttemptPage({
   });
   if (!attempt) notFound();
 
-  if (attempt.status !== "IN_PROGRESS") {
+  if (!["IN_PROGRESS", "RETURNED"].includes(attempt.status)) {
     redirect(`/results/${attempt.id}`);
   }
 
   // A student who closed the tab past the deadline is submitted server-side.
-  if (isAttemptExpired(attempt)) {
+  if (isAttemptExpired({ ...attempt, status: attempt.status })) {
     const spent = Math.max(0, Math.round((nowMs() - attempt.startedAt.getTime()) / 1000));
     await db.attempt.update({
       where: { id: attempt.id },
@@ -62,9 +62,10 @@ export default async function AttemptPage({
       instructions={attempt.assessment.instructions}
       questions={questions}
       initialResponses={initialResponses}
-      timeLimitMin={attempt.assessment.timeLimitMin}
+      timeLimitMin={attempt.status === "RETURNED" ? null : attempt.assessment.timeLimitMin}
       startedAt={attempt.startedAt.getTime()}
       passScore={attempt.assessment.passScore}
+      returnNote={attempt.status === "RETURNED" ? attempt.returnNote : null}
     />
   );
 }

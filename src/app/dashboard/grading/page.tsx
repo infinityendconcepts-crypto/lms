@@ -22,19 +22,23 @@ export default async function GradingQueuePage({
 }) {
   const sp = await searchParams;
   const ctx = await requireTenant("TEACHER");
-  const status = sp.status === "GRADED" ? "GRADED" : sp.status === "ALL" ? "ALL" : "SUBMITTED";
+  const status =
+    sp.status === "GRADED"
+      ? "GRADED"
+      : sp.status === "RETURNED"
+        ? "RETURNED"
+        : sp.status === "ALL"
+          ? "ALL"
+          : "SUBMITTED";
 
-  const [assessments, attempts, counts] = await Promise.all([
-    db.assessment.findMany({
-      where: { tenantId: ctx.tenant.id },
-      select: { id: true, title: true },
-      orderBy: { title: "asc" },
-    }),
+  const [attempts, counts] = await Promise.all([
     db.attempt.findMany({
       where: {
         tenantId: ctx.tenant.id,
         ...(sp.assessment ? { assessmentId: sp.assessment } : {}),
-        ...(status === "ALL" ? { status: { in: ["SUBMITTED", "GRADED", "IN_PROGRESS"] } } : { status }),
+        ...(status === "ALL"
+          ? { status: { in: ["SUBMITTED", "GRADED", "IN_PROGRESS", "RETURNED"] } }
+          : { status }),
       },
       include: {
         student: true,
@@ -48,10 +52,11 @@ export default async function GradingQueuePage({
       db.attempt.count({ where: { tenantId: ctx.tenant.id, status: "SUBMITTED" } }),
       db.attempt.count({ where: { tenantId: ctx.tenant.id, status: "GRADED" } }),
       db.attempt.count({ where: { tenantId: ctx.tenant.id, status: "IN_PROGRESS" } }),
+      db.attempt.count({ where: { tenantId: ctx.tenant.id, status: "RETURNED" } }),
     ]),
   ]);
 
-  const [pending, graded, inProgress] = counts;
+  const [pending, graded, inProgress, returned] = counts;
   const pendingAnswers = attempts.reduce(
     (sum, a) => sum + a.answers.filter((x) => x.score === null).length,
     0
@@ -83,18 +88,15 @@ export default async function GradingQueuePage({
           hint={pending ? `${pendingAnswers} open answers in view` : "Inbox zero"}
           icon={<Inbox className="size-4" />}
         />
+        <Stat label="Returned" value={returned} hint="awaiting learner revision" icon={<Clock className="size-4" />} />
         <Stat label="Graded" value={graded} icon={<CheckCircle2 className="size-4" />} />
         <Stat label="In progress" value={inProgress} hint="learners mid-attempt" icon={<Timer className="size-4" />} />
-        <Stat
-          label="Assessments"
-          value={assessments.length}
-          hint="with submission tracking"
-        />
       </div>
 
       <div className="mt-6 mb-4 flex flex-wrap items-center gap-2">
         {[
           { key: "SUBMITTED", label: `Needs grading${pending ? ` (${pending})` : ""}` },
+          { key: "RETURNED", label: `Returned${returned ? ` (${returned})` : ""}` },
           { key: "GRADED", label: "Graded" },
           { key: "ALL", label: "All attempts" },
         ].map((chip) => {
@@ -126,11 +128,19 @@ export default async function GradingQueuePage({
       {attempts.length === 0 ? (
         <EmptyState
           icon={<CheckCircle2 className="size-5" />}
-          title={status === "SUBMITTED" ? "Nothing to grade" : "No attempts found"}
+          title={
+            status === "SUBMITTED"
+              ? "Nothing to grade"
+              : status === "RETURNED"
+                ? "No returned attempts"
+                : "No attempts found"
+          }
           description={
             status === "SUBMITTED"
               ? "When learners submit open-ended or case-study answers, they will appear here."
-              : "Try a different filter or wait for learners to submit an assessment."
+              : status === "RETURNED"
+                ? "Attempts you return to learners with comments or instructions will appear here."
+                : "Try a different filter or wait for learners to submit an assessment."
           }
           action={
             <Link href="/dashboard/assessments" className="btn-secondary btn-sm">
@@ -188,9 +198,11 @@ export default async function GradingQueuePage({
                     <td className="tabular-nums">
                       {attempt.status === "GRADED"
                         ? `${attempt.score ?? 0}/${attempt.maxScore} · ${percent}%`
-                        : attempt.score !== null
-                          ? `${attempt.score}/${attempt.maxScore}`
-                          : "—"}
+                        : attempt.status === "RETURNED"
+                          ? "Returned"
+                          : attempt.score !== null
+                            ? `${attempt.score}/${attempt.maxScore}`
+                            : "—"}
                     </td>
                     <td className="text-[11px] text-slate-500">
                       {attempt.submittedAt ? (
@@ -208,7 +220,7 @@ export default async function GradingQueuePage({
                         href={`/dashboard/grading/${attempt.id}`}
                         className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 hover:underline"
                       >
-                        {attempt.status === "SUBMITTED" ? "Grade" : "Review"}
+                        {attempt.status === "SUBMITTED" ? "Grade" : attempt.status === "RETURNED" ? "View / update" : "Review"}
                         <ArrowRight className="size-3" />
                       </Link>
                     </td>

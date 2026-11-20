@@ -124,6 +124,7 @@ export function StatusBadge({ status }: { status: string }) {
     IN_PROGRESS: "amber",
     SUBMITTED: "sky",
     GRADED: "green",
+    RETURNED: "amber",
     SUSPENDED: "red",
   };
   const labels: Record<string, string> = {
@@ -138,6 +139,7 @@ export function StatusBadge({ status }: { status: string }) {
     IN_PROGRESS: "In progress",
     SUBMITTED: "Needs grading",
     GRADED: "Graded",
+    RETURNED: "Returned",
     SUSPENDED: "Suspended",
   };
   return <Badge tone={map[status] ?? "slate"}>{labels[status] ?? status}</Badge>;

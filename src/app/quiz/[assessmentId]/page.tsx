@@ -54,14 +54,14 @@ export default async function QuizLandingPage({
     where: { assessmentId, studentId: ctx.user.id },
     orderBy: { startedAt: "desc" },
   });
-  const inProgress = attempts.find((a) => a.status === "IN_PROGRESS");
-  const finished = attempts.filter((a) => a.status !== "IN_PROGRESS");
+  const inProgress = attempts.find((a) => a.status === "IN_PROGRESS" || a.status === "RETURNED");
+  const finished = attempts.filter((a) => a.status !== "IN_PROGRESS" && a.status !== "RETURNED");
   const best = finished.reduce((max, a) => Math.max(max, pct(a.score ?? 0, a.maxScore)), 0);
   const remaining = Math.max(0, assessment.attemptsAllowed - finished.length);
   const now = nowMs();
   const notOpen = assessment.openAt && assessment.openAt.getTime() > now;
   const pastDue = assessment.dueAt && assessment.dueAt.getTime() < now;
-  const closed = assessment.status !== "PUBLISHED" || notOpen || pastDue || remaining <= 0;
+  const closed = assessment.status !== "PUBLISHED" || notOpen || pastDue || (remaining <= 0 && !inProgress);
 
   const totalPoints = assessment.questions.reduce((sum, q) => sum + q.points, 0);
   const typeCounts = new Map<string, number>();
@@ -208,13 +208,21 @@ export default async function QuizLandingPage({
             {inProgress ? (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-slate-800">You have an attempt in progress.</p>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {inProgress.status === "RETURNED"
+                      ? "Your teacher returned this attempt for revision."
+                      : "You have an attempt in progress."}
+                  </p>
                   <p className="text-xs text-slate-500">
-                    Started {formatDate(inProgress.startedAt, true)}. Continue where you left off.
+                    {inProgress.status === "RETURNED"
+                      ? inProgress.returnNote
+                        ? "Review the comments and instructions, then revise and resubmit."
+                        : "Review the feedback, then revise and resubmit."
+                      : `Started ${formatDate(inProgress.startedAt, true)}. Continue where you left off.`}
                   </p>
                 </div>
                 <Link href={`/attempt/${inProgress.id}`} className="btn-primary">
-                  Continue attempt <ArrowRight className="size-4" />
+                  {inProgress.status === "RETURNED" ? "Revise attempt" : "Continue attempt"} <ArrowRight className="size-4" />
                 </Link>
               </div>
             ) : closed ? (
@@ -266,7 +274,9 @@ export default async function QuizLandingPage({
                     <p className="text-sm font-semibold text-slate-800">
                       {attempt.status === "SUBMITTED"
                         ? "Submitted — awaiting grading"
-                        : `${pct(attempt.score ?? 0, attempt.maxScore)}%`}
+                        : attempt.status === "RETURNED"
+                          ? "Returned for revision"
+                          : `${pct(attempt.score ?? 0, attempt.maxScore)}%`}
                     </p>
                     <p className="text-[11px] text-slate-400">
                       {formatDate(attempt.submittedAt ?? attempt.startedAt, true)}

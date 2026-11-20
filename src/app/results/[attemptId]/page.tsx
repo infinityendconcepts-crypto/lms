@@ -44,7 +44,7 @@ export default async function AttemptResultsPage({
   const isOwner = attempt.studentId === ctx.user.id;
   if (!isTeacher && !isOwner) notFound();
 
-  if (attempt.status === "IN_PROGRESS" && isOwner) {
+  if ((attempt.status === "IN_PROGRESS" || attempt.status === "RETURNED") && isOwner) {
     redirect(`/attempt/${attempt.id}`);
   }
 
@@ -59,6 +59,7 @@ export default async function AttemptResultsPage({
     (assessment.showResults === "MANUAL" && attempt.status === "GRADED");
   const canSeeScores = isTeacher || released;
   const showKey = canSeeScores;
+  const canSeeReturnFeedback = isTeacher || (isOwner && attempt.status === "RETURNED");
 
   const correctCount = answers.filter((a) => a.score !== null && a.score >= a.maxScore).length;
   const partialCount = answers.filter((a) => a.score !== null && a.score > 0 && a.score < a.maxScore).length;
@@ -103,6 +104,20 @@ export default async function AttemptResultsPage({
               <p className="text-[11px] text-emerald-700">
                 Objective questions are graded automatically. Open answers may need a teacher.
               </p>
+            </div>
+          </div>
+        )}
+        {canSeeReturnFeedback && attempt.returnNote && attempt.status === "RETURNED" && (
+          <div className="mb-5 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <GraduationCap className="mt-0.5 size-4 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-semibold">Returned for revision</p>
+              <MathText content={attempt.returnNote} className="mt-1 text-xs leading-5 text-amber-900" />
+              {isOwner && (
+                <Link href={`/attempt/${attempt.id}`} className="btn-primary btn-sm mt-3 inline-flex">
+                  Revise and resubmit
+                </Link>
+              )}
             </div>
           </div>
         )}
@@ -248,7 +263,9 @@ export default async function AttemptResultsPage({
                 : "Review the feedback, then ask your teacher about a retake."
               : attempt.status === "SUBMITTED"
                 ? "Some answers may still be awaiting manual grading."
-                : "This attempt is not finished."}
+                : attempt.status === "RETURNED"
+                  ? "Your teacher returned this attempt with comments/instructions. Revise and resubmit when ready."
+                  : "This attempt is not finished."}
           </p>
           <div className="flex gap-2">
             {isTeacher && (
@@ -256,9 +273,15 @@ export default async function AttemptResultsPage({
                 <GraduationCap className="size-3.5" /> Grade attempt
               </Link>
             )}
-            <Link href={`/quiz/${assessment.id}`} className="btn-primary btn-sm">
-              {attempt.status === "GRADED" ? "Try again" : "Back to assessment"}
-            </Link>
+            {attempt.status === "RETURNED" && isOwner ? (
+              <Link href={`/attempt/${attempt.id}`} className="btn-primary btn-sm">
+                Revise and resubmit
+              </Link>
+            ) : (
+              <Link href={`/quiz/${assessment.id}`} className="btn-primary btn-sm">
+                {attempt.status === "GRADED" ? "Try again" : "Back to assessment"}
+              </Link>
+            )}
           </div>
         </div>
       </main>

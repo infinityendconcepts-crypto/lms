@@ -11,10 +11,11 @@ import {
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireTenant } from "@/lib/tenant";
-import { finalizeAttemptAction, gradeAnswerAction } from "@/lib/actions/grading";
+import { finalizeAttemptAction, gradeAnswerAction, returnAttemptAction } from "@/lib/actions/grading";
 import { Avatar, Badge, StatusBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { QuestionReview } from "@/components/QuestionReview";
+import { MathText } from "@/components/MathText";
 import { parseData } from "@/lib/questions";
 import { formatDate, formatDuration, pct } from "@/lib/utils";
 
@@ -25,7 +26,7 @@ export default async function GradingDetailPage({
   searchParams,
 }: {
   params: Promise<{ attemptId: string }>;
-  searchParams: Promise<{ graded?: string; finalized?: string; error?: string }>;
+  searchParams: Promise<{ graded?: string; finalized?: string; returned?: string; error?: string }>;
 }) {
   const { attemptId } = await params;
   const sp = await searchParams;
@@ -110,15 +111,22 @@ export default async function GradingDetailPage({
         </div>
       </div>
 
-      {(sp.graded || sp.finalized || sp.error) && (
+      {(sp.graded || sp.finalized || sp.returned || sp.error) && (
         <div
           className={`mb-5 rounded-xl border px-4 py-3 text-sm ${
             sp.error
               ? "border-rose-200 bg-rose-50 text-rose-700"
-              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : sp.returned
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700"
           }`}
         >
-          {sp.error ?? (sp.finalized ? "Attempt finalized. The learner can now see the outcome." : "Grade saved.")}
+          {sp.error ??
+            (sp.finalized
+              ? "Attempt finalized. The learner can now see the outcome."
+              : sp.returned
+                ? "Attempt returned to the learner with your comments and instructions. It has not been finalized as graded."
+                : "Grade saved.")}
         </div>
       )}
 
@@ -144,10 +152,20 @@ export default async function GradingDetailPage({
         })}
       </div>
 
+      {attempt.status === "RETURNED" && attempt.returnNote ? (
+        <section className="card mb-5 border-amber-200 bg-amber-50/50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Returned to learner</p>
+          <MathText content={attempt.returnNote} className="mt-1 text-sm leading-6 text-amber-900" />
+          <p className="mt-2 text-[11px] text-amber-800/80">
+            The learner can revise and resubmit this attempt. You can update the comments below or finalize as graded when ready.
+          </p>
+        </section>
+      ) : null}
+
       <div className="mb-4 flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
         <Info className="mt-0.5 size-4 shrink-0 text-slate-400" />
         Scores are clamped to each question&apos;s maximum. Saving a grade recalculates totals instantly;
-        finalize once every open answer has a score.
+        finalize once every open answer has a score. You can also return the attempt to the learner with comments and instructions without finalizing a grade.
       </div>
 
       <div className="space-y-5">
@@ -203,11 +221,12 @@ export default async function GradingDetailPage({
                         <label className="label" htmlFor={`feedback-${answer.id}`}>
                           Feedback (optional)
                         </label>
-                        <input
+                        <textarea
                           id={`feedback-${answer.id}`}
                           name="feedback"
+                          rows={2}
                           placeholder="Great reasoning — check the sign in step 2."
-                          className="input"
+                          className="textarea"
                         />
                       </div>
                       <SubmitButton pendingText="Saving…">Save grade</SubmitButton>
@@ -244,13 +263,14 @@ export default async function GradingDetailPage({
                       </div>
                       <div className="min-w-0 flex-1">
                         <label className="label" htmlFor={`regrade-feedback-${answer.id}`}>
-                          Feedback
+                          Feedback (optional)
                         </label>
-                        <input
+                        <textarea
                           id={`regrade-feedback-${answer.id}`}
                           name="feedback"
                           defaultValue={answer.feedback ?? ""}
-                          className="input"
+                          rows={2}
+                          className="textarea"
                         />
                       </div>
                       <SubmitButton variant="secondary" pendingText="Saving…">
@@ -265,26 +285,60 @@ export default async function GradingDetailPage({
         })}
       </div>
 
-      {attempt.status !== "GRADED" && (
-        <div className="mt-6 flex flex-col items-start justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/60 p-5 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-sm font-bold text-brand-900">
-              {open.length > 0
-                ? `${open.length} answer${open.length === 1 ? "" : "s"} still need a score`
-                : "Every answer has a score"}
-            </p>
-            <p className="text-[11px] text-brand-700">
-              {open.length > 0
-                ? "Use the forms above, then finalize the attempt."
-                : "Finalize to lock in the grade and release it to the learner."}
-            </p>
+      {attempt.status !== "GRADED" && attempt.status !== "IN_PROGRESS" && (
+        <div className="mt-6 space-y-4">
+          <div className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/60 p-5 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-sm font-bold text-brand-900">
+                {open.length > 0
+                  ? `${open.length} answer${open.length === 1 ? "" : "s"} still need a score`
+                  : "Every answer has a score"}
+              </p>
+              <p className="text-[11px] text-brand-700">
+                {open.length > 0
+                  ? "Use the forms above, then finalize the attempt if you are ready to grade it."
+                  : "Finalize to lock in the grade and release it to the learner."}
+              </p>
+            </div>
+            <form action={finalizeAttemptAction}>
+              <input type="hidden" name="attemptId" value={attempt.id} />
+              <SubmitButton pendingText="Finalizing…">
+                <CheckCircle2 className="size-4" /> Finalize grade
+              </SubmitButton>
+            </form>
           </div>
-          <form action={finalizeAttemptAction}>
-            <input type="hidden" name="attemptId" value={attempt.id} />
-            <SubmitButton pendingText="Finalizing…">
-              <CheckCircle2 className="size-4" /> Finalize grade
-            </SubmitButton>
-          </form>
+
+          <div className="rounded-2xl border border-amber-200 bg-white p-5">
+            <p className="text-sm font-bold text-slate-900">Return to learner without grading</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Send this attempt back with comments and instructions for revision. The learner can update their answers and resubmit; this does not finalize a grade.
+            </p>
+            <form action={returnAttemptAction} className="mt-4 space-y-3">
+              <input type="hidden" name="attemptId" value={attempt.id} />
+              <div>
+                <label htmlFor="returnNote" className="label">
+                  Comments & instructions
+                </label>
+                <textarea
+                  id="returnNote"
+                  name="returnNote"
+                  required
+                  defaultValue={attempt.returnNote ?? ""}
+                  rows={5}
+                  placeholder="Explain what needs improvement and give clear instructions for what the learner should do next…"
+                  className="textarea"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <SubmitButton variant="secondary" pendingText="Returning…">
+                  Return to learner
+                </SubmitButton>
+                <span className="text-[11px] text-slate-500">
+                  Learners will see this feedback and can revise their attempt.
+                </span>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

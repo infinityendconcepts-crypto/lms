@@ -60,10 +60,10 @@ export async function refreshAttemptTotals(attemptId: string) {
   const pending = attempt.answers.filter((a) => a.score === null).length;
   const earned = round(attempt.answers.reduce((sum, a) => sum + (a.score ?? 0), 0));
 
-  if (attempt.status === "IN_PROGRESS") {
+  if (attempt.status === "IN_PROGRESS" || attempt.status === "RETURNED") {
     return db.attempt.update({
       where: { id: attemptId },
-      data: { maxScore },
+      data: { maxScore, score: attempt.status === "RETURNED" ? earned : null },
     });
   }
 
@@ -107,8 +107,10 @@ export function isAttemptExpired(attempt: {
   startedAt: Date;
   submittedAt: Date | null;
   assessment: { timeLimitMin: number | null };
+  status?: string;
 }) {
   if (attempt.submittedAt) return false;
+  if (attempt.status === "RETURNED") return false;
   const limit = attempt.assessment.timeLimitMin;
   if (!limit) return false;
   return Date.now() > attempt.startedAt.getTime() + limit * 60_000 + 15_000;

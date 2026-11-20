@@ -429,7 +429,7 @@ model Attempt {
   tenantId     String
   assessmentId String
   studentId    String
-  status       String    @default("IN_PROGRESS") // IN_PROGRESS | SUBMITTED | GRADED
+  status       String    @default("IN_PROGRESS") // IN_PROGRESS | SUBMITTED | GRADED | RETURNED
   score        Float?
   maxScore     Float     @default(0)
   startedAt    DateTime  @default(now())
@@ -437,6 +437,8 @@ model Attempt {
   gradedAt     DateTime?
   gradedById   String?
   timeSpentSec Int       @default(0)
+  returnedAt   DateTime?
+  returnNote   String?
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)

@@ -59,7 +59,7 @@ export async function finalizeAttemptAction(formData: FormData) {
 
   await db.attempt.update({
     where: { id: attemptId },
-    data: { status: "GRADED", gradedAt: new Date(), gradedById: ctx.user.id },
+    data: { status: "GRADED", gradedAt: new Date(), gradedById: ctx.user.id, returnedAt: null, returnNote: null },
   });
   await refreshAttemptTotals(attemptId);
   await audit({
@@ -71,4 +71,46 @@ export async function finalizeAttemptAction(formData: FormData) {
   revalidatePath(`/dashboard/grading/${attemptId}`);
   revalidatePath("/dashboard/grading");
   redirect(`/dashboard/grading/${attemptId}?finalized=1`);
+}
+
+export async function returnAttemptAction(formData: FormData) {
+  const ctx = await requireTenant("TEACHER");
+  const attemptId = String(formData.get("attemptId") ?? "");
+  const returnNote = String(formData.get("returnNote") ?? "").trim();
+  if (!returnNote) {
+    redirect(`/dashboard/grading/${attemptId}?error=Add+comments+or+instructions+before+returning`);
+  }
+
+  const attempt = await db.attempt.findFirst({
+    where: { id: attemptId, tenantId: ctx.tenant.id },
+    include: { assessment: true },
+  });
+  if (!attempt) throw new Error("Attempt not found");
+  if (attempt.status === "IN_PROGRESS") {
+    redirect(`/dashboard/grading/${attemptId}?error=This+attempt+has+not+been+submitted+yet`);
+  }
+
+  await db.attempt.update({
+    where: { id: attemptId },
+    data: {
+      status: "RETURNED",
+      returnNote,
+      returnedAt: new Date(),
+      gradedAt: null,
+      gradedById: null,
+    },
+  });
+  await refreshAttemptTotals(attemptId);
+  await audit({
+    tenantId: ctx.tenant.id,
+    actorId: ctx.user.id,
+    action: "attempt.returned",
+    target: attemptId,
+  });
+  revalidatePath(`/dashboard/grading/${attemptId}`);
+  revalidatePath("/dashboard/grading");
+  revalidatePath(`/results/${attemptId}`);
+  revalidatePath(`/quiz/${attempt.assessmentId}`);
+  revalidatePath("/dashboard/results");
+  redirect(`/dashboard/grading/${attemptId}?returned=1`);
 }
