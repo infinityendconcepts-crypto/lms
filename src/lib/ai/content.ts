@@ -257,10 +257,11 @@ function mapAiQuestions(value: z.infer<typeof AiDraftSchema>["questions"]): Draf
   });
 }
 
-function systemPrompt() {
+function systemPrompt(instruction?: string) {
   return [
     "You are a helpful curriculum assistant. Draft lesson material ONLY from the supplied source text.",
     "Do not invent facts, numbers or claims that are not present in the source.",
+    instruction ? `Follow the teacher's instruction when it is relevant: ${instruction.slice(0, 2000)}` : "",
     "Respond with a single JSON object matching this shape:",
     '{ "summary": string, "keyPoints": string[], "content": string (Markdown),',
     '  "questions": [{ "type": "MULTIPLE_CHOICE"|"YES_NO"|"OPEN_ENDED"|"NUMERIC"|"FILL_BLANK",',
@@ -281,8 +282,12 @@ export async function generateContentDraft(input: {
   fileName: string;
   mode: ContentDraftMode;
   providerChoice: string;
+  instruction?: string;
 }): Promise<ContentDraftResult> {
-  const local = localContentDraft(input.text, input.fileName, input.mode);
+  const instruction = input.instruction?.trim() ?? "";
+  const mode: ContentDraftMode =
+    input.mode === "all" && /\b(quiz|questions?)\b/i.test(instruction) ? "questions" : input.mode;
+  const local = localContentDraft(input.text, input.fileName, mode);
   const { runtime, label } = await resolveRuntime(input.tenantId, input.providerChoice);
   if (!runtime) {
     return { draft: local, source: "local", provider: "local", model: "nkanyezi-content-v1" };
@@ -290,10 +295,11 @@ export async function generateContentDraft(input: {
 
   try {
     const result = await callProvider(runtime, {
-      system: systemPrompt(),
+      system: systemPrompt(instruction),
       user: JSON.stringify({
         task: "draft_lesson_content",
-        mode: input.mode,
+        mode,
+        instruction: instruction || undefined,
         fileName: input.fileName,
         source: input.text.slice(0, 40_000),
       }),
@@ -308,11 +314,11 @@ export async function generateContentDraft(input: {
       summary: parsed.summary?.trim() || local.summary,
       keyPoints: parsed.keyPoints?.length ? parsed.keyPoints : local.keyPoints,
       content:
-        input.mode === "questions"
+        mode === "questions"
           ? ""
           : parsed.content?.trim() || local.content,
       questions:
-        input.mode === "lesson" || input.mode === "summary"
+        mode === "lesson" || mode === "summary"
           ? []
           : aiQuestions.length
             ? aiQuestions

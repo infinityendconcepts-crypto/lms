@@ -26,6 +26,7 @@ export async function generateContentDraftAction(input: {
   courseId?: string;
   mode?: ContentDraftMode;
   providerChoice?: string;
+  instruction?: string;
 }): Promise<GenerateContentDraftResponse> {
   const ctx = await requireTenant("TEACHER");
   const tenantId = ctx.tenant.id;
@@ -102,6 +103,7 @@ export async function generateContentDraftAction(input: {
     fileName: attachmentName ?? "lesson notes",
     mode,
     providerChoice,
+    instruction: input.instruction,
   });
 
   await audit({

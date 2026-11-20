@@ -8,8 +8,10 @@ import {
   ChevronUp,
   Code2,
   Copy,
+  Eye,
   GripVertical,
   Image as ImageIcon,
+  LayoutGrid,
   Link2,
   Plus,
   Presentation,
@@ -20,9 +22,11 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { MathText } from "@/components/MathText";
+import { OverlayModal } from "@/components/OverlayModal";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { UploadField } from "@/components/UploadField";
+import { TextBlockAssistant } from "@/components/ai/TextBlockAssistant";
+import { LessonBlocks } from "@/components/LessonBlocks";
 import { cn } from "@/lib/utils";
 import {
   LESSON_BLOCK_LABELS,
@@ -97,14 +101,18 @@ export function LessonBlockBuilder({
   codePads = [],
   courseId,
   lessonId,
+  attachments = [],
+  providerOptions = [],
 }: {
   content?: string;
   contentBlocks?: string | null;
   meetingUrl?: string | null;
   codePadId?: string | null;
-  codePads?: { id: string; title: string; language: string }[];
+  codePads?: { id: string; title: string; language: string; published: boolean }[];
   courseId: string;
   lessonId: string;
+  attachments?: { id: string; name: string; kind: string }[];
+  providerOptions?: { value: string; label: string; detail?: string }[];
 }) {
   const [blocks, setBlocks] = useState<LessonBlock[]>(() =>
     parseLessonBlocks(contentBlocks, { content, meetingUrl, codePadId })
@@ -112,6 +120,7 @@ export function LessonBlockBuilder({
   const [expandedId, setExpandedId] = useState<string | null>(() => blocks[0]?.id ?? null);
   const [dragging, setDragging] = useState<Dragging | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [previewBlock, setPreviewBlock] = useState<LessonBlock | null>(null);
 
   const markdown = blocksToMarkdown(blocks);
   const legacyMeetingUrl = blocksToMeetingUrl(blocks) ?? "";
@@ -207,17 +216,28 @@ export function LessonBlockBuilder({
     switch (block.type) {
       case "text":
         return (
-          <RichTextEditor
-            key={block.id}
-            name={`block-${block.id}-text`}
-            label=""
-            rows={8}
-            value={block.content}
-            onChange={(next) =>
-              updateBlock(block.id, (item) => (item.type === "text" ? { ...item, content: next } : item))
-            }
-            placeholder="Write this section. Use the toolbar for headings, lists, links and formatting."
-          />
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <TextBlockAssistant
+                fieldName={`block-${block.id}-text`}
+                lessonId={lessonId}
+                courseId={courseId}
+                attachments={attachments}
+                providerOptions={providerOptions}
+              />
+            </div>
+            <RichTextEditor
+              key={block.id}
+              name={`block-${block.id}-text`}
+              label=""
+              rows={8}
+              value={block.content}
+              onChange={(next) =>
+                updateBlock(block.id, (item) => (item.type === "text" ? { ...item, content: next } : item))
+              }
+              placeholder="Write this section. Use the toolbar for headings, lists, links and formatting."
+            />
+          </div>
         );
 
       case "video":
@@ -353,11 +373,6 @@ export function LessonBlockBuilder({
                 className="input font-mono text-xs"
               />
             </div>
-            {block.content.trim() && (
-              <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3">
-                <MathText content={`$$\n${block.content}\n$$`} />
-              </div>
-            )}
           </div>
         );
 
@@ -589,9 +604,39 @@ export function LessonBlockBuilder({
               to reorder.
             </p>
           </div>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-            {blocks.length} block{blocks.length === 1 ? "" : "s"}
-          </span>
+          <div className="flex items-center gap-2">
+            <details className="relative">
+              <summary className="btn-ghost btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                <LayoutGrid className="size-3.5" /> Quick add
+              </summary>
+              <div className="absolute right-0 z-30 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                <p className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  Add a block
+                </p>
+                {LESSON_BLOCK_TYPES.map((type) => {
+                  const Icon = BLOCK_ICONS[type];
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={(event) => {
+                        addBlock(type);
+                        event.currentTarget.closest("details")?.removeAttribute("open");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-medium text-slate-700 transition hover:bg-brand-50 hover:text-brand-700"
+                    >
+                      <Icon className="size-3.5 shrink-0 text-slate-400" />
+                      <span className="flex-1">{LESSON_BLOCK_LABELS[type]}</span>
+                      <span className="text-[9px] text-slate-300">+</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </details>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+              {blocks.length} block{blocks.length === 1 ? "" : "s"}
+            </span>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {LESSON_BLOCK_TYPES.map((type) => {
@@ -693,6 +738,15 @@ export function LessonBlockBuilder({
                   <div className="hidden shrink-0 items-center gap-0.5 sm:flex">
                     <button
                       type="button"
+                      onClick={() => setPreviewBlock(block)}
+                      className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      title="Preview block"
+                      aria-label="Preview block"
+                    >
+                      <Eye className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => moveBlock(block.id, index - 1)}
                       disabled={index === 0}
                       className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
@@ -740,6 +794,9 @@ export function LessonBlockBuilder({
                   </button>
                 </div>
                 <div className="flex items-center gap-1 border-t border-slate-100 px-3 py-1.5 sm:hidden">
+                  <button type="button" onClick={() => setPreviewBlock(block)} className="btn-ghost btn-sm">
+                    <Eye className="size-3" /> Preview
+                  </button>
                   <button type="button" onClick={() => moveBlock(block.id, index - 1)} disabled={index === 0} className="btn-ghost btn-sm">
                     <ArrowUp className="size-3" /> Up
                   </button>
@@ -764,6 +821,29 @@ export function LessonBlockBuilder({
         })}
         {renderDropZone(blocks.length)}
       </div>
+
+      <OverlayModal
+        open={Boolean(previewBlock)}
+        onClose={() => setPreviewBlock(null)}
+        title={
+          previewBlock
+            ? `${LESSON_BLOCK_LABELS[previewBlock.type]} block preview`
+            : "Block preview"
+        }
+        subtitle="How this block appears to learners"
+        size="lg"
+      >
+        <div className="mx-auto max-w-3xl">
+          {previewBlock && (
+            <LessonBlocks
+              blocks={[previewBlock]}
+              courseId={courseId}
+              codePads={codePads}
+              teacher
+            />
+          )}
+        </div>
+      </OverlayModal>
     </div>
   );
 }

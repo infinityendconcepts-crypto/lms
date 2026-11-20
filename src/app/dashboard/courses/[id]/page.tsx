@@ -68,6 +68,7 @@ import { Avatar, Badge, EmptyState, Progress, StatusBadge, Tabs } from "@/compon
 import { SubmitButton } from "@/components/SubmitButton";
 import { CoursePlanBoard, type PlanTaskView } from "@/components/CoursePlanBoard";
 import { UploadField } from "@/components/UploadField";
+import { CoursePreviewButton } from "@/components/dashboard/CoursePreviewButton";
 import { formatBytes } from "@/lib/storage";
 import { currencyFor } from "@/lib/plans";
 import { formatDate, formatMoney, nowMs } from "@/lib/utils";
@@ -274,9 +275,7 @@ export default async function CourseDetailPage({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <Link href={`/learn/${course.id}`} className="btn-secondary btn-sm">
-            <BookOpen className="size-3.5" /> Learner preview
-          </Link>
+          <CoursePreviewButton courseId={course.id} />
           <Link href={`/dashboard/courses/${course.id}?tab=assessments`} className="btn-secondary btn-sm">
             <ClipboardCheck className="size-3.5" /> Assessments
           </Link>

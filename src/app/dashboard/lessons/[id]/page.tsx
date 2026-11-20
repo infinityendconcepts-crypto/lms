@@ -17,13 +17,12 @@ import { db } from "@/lib/db";
 import { canTeach, requireTenant } from "@/lib/tenant";
 import { deleteLessonAction, updateLessonAction } from "@/lib/actions/course";
 import { deleteAttachmentAction } from "@/lib/actions/course";
-import { Badge, StatusBadge } from "@/components/ui";
+import { Badge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LessonContentFields } from "@/components/dashboard/LessonContentFields";
+import { LessonPreviewButton } from "@/components/dashboard/LessonPreviewButton";
 import { UploadField } from "@/components/UploadField";
-import { LessonBlocks } from "@/components/LessonBlocks";
 import { parseLessonBlocks } from "@/lib/lesson-blocks";
-import { AiContentAssist } from "@/components/ai/AiContentAssist";
 import { providerOptions } from "@/lib/ai/benchmark";
 import { formatBytes } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
@@ -93,6 +92,11 @@ export default async function LessonEditorPage({
               Next <ArrowRight className="size-3" />
             </Link>
           )}
+          <LessonPreviewButton
+            blocks={previewBlocks}
+            courseId={lesson.courseId}
+            codePads={lesson.course.codePads}
+          />
           <Link href={`/learn/${lesson.courseId}/lessons/${lesson.id}`} className="btn-secondary btn-sm">
             <Eye className="size-3.5" /> Learner view
           </Link>
@@ -133,9 +137,8 @@ export default async function LessonEditorPage({
         </div>
       )}
 
-      <div className="grid min-w-0 gap-5 xl:grid-cols-[1.6fr_1fr]">
-        <div className="min-w-0 space-y-5">
-          <form action={updateLessonAction} className="card-pad space-y-4">
+      <div className="min-w-0 space-y-5">
+        <form action={updateLessonAction} className="card-pad space-y-4">
             <input type="hidden" name="lessonId" value={lesson.id} />
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
@@ -187,9 +190,20 @@ export default async function LessonEditorPage({
                   id: pad.id,
                   title: pad.title,
                   language: pad.language,
+                  published: pad.published,
                 }))}
                 courseId={lesson.courseId}
                 lessonId={lesson.id}
+                attachments={lesson.attachments.map((file) => ({
+                  id: file.id,
+                  name: file.name,
+                  kind: file.kind,
+                }))}
+                providerOptions={aiProviders.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                  detail: option.detail,
+                }))}
               />
             </div>
 
@@ -277,65 +291,9 @@ export default async function LessonEditorPage({
               )}
             </div>
           </div>
-        </div>
 
-        <aside className="min-w-0 space-y-4">
-          <AiContentAssist
-            lessonId={lesson.id}
-            courseId={lesson.courseId}
-            attachments={lesson.attachments.map((file) => ({
-              id: file.id,
-              name: file.name,
-              kind: file.kind,
-            }))}
-            providerOptions={aiProviders.map((option) => ({
-              value: option.value,
-              label: option.label,
-              detail: option.detail,
-            }))}
-          />
-
-          <div className="card p-5">
-            <h2 className="text-sm font-bold text-slate-900">Lesson content preview</h2>
-            <p className="mt-1 text-[11px] text-slate-500">
-              A live look at the block layout learners will see.
-            </p>
-            <div className="thin-scroll mt-3 max-h-[520px] space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <LessonBlocks
-                blocks={previewBlocks}
-                courseId={lesson.courseId}
-                codePads={lesson.course.codePads}
-                teacher
-              />
-            </div>
-          </div>
-
-          <div className="card p-5">
-            <h2 className="text-sm font-bold text-slate-900">Course lessons</h2>
-            <ol className="mt-3 space-y-1">
-              {lesson.course.lessons.map((item, i) => (
-                <li key={item.id}>
-                  <Link
-                    href={`/dashboard/lessons/${item.id}`}
-                    className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] transition ${
-                      item.id === lesson.id
-                        ? "bg-brand-50 font-semibold text-brand-700"
-                        : "text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    <span className="w-4 text-[10px] font-bold text-slate-400">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                    <StatusBadge status={item.published ? "PUBLISHED" : "DRAFT"} />
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="card p-5">
-            <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
+        <div className="card p-5">
+          <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
               <Calendar className="size-3.5 text-slate-400" /> Lesson metadata
             </h3>
             <dl className="mt-2.5 space-y-1.5 text-[11px]">
@@ -362,8 +320,7 @@ export default async function LessonEditorPage({
                 <Trash2 className="size-3.5" /> Delete lesson
               </SubmitButton>
             </form>
-          </div>
-        </aside>
+        </div>
       </div>
     </div>
   );
