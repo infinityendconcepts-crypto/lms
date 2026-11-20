@@ -14,6 +14,8 @@ import { requireTenant } from "@/lib/tenant";
 import { getWorkspaceReport } from "@/lib/reporting";
 import { RISK_BANDS, RISK_META } from "@/lib/ai/format";
 import { Badge, EmptyState, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { ChartExportButton } from "@/components/ChartExport";
+import { BarChart, ChartCard, HorizontalBarChart, ScoreDistributionChart } from "@/components/charts";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Reporting" };
@@ -57,6 +59,21 @@ export default async function ReportingPage({
     sp.course && courseOptions.some((course) => course.id === sp.course) ? sp.course : null;
   const report = await getWorkspaceReport(ctx.tenant.id, selectedCourse);
   const exportQuery = selectedCourse ? `&course=${selectedCourse}` : "";
+  const scopeLabel = selectedCourse ? "course" : "workspace";
+  const attemptScores = report.attemptRows
+    .filter((attempt) => attempt.status !== "IN_PROGRESS")
+    .map((attempt) => attempt.score);
+  const scoreBins = [0, 40, 50, 60, 70, 85, 101];
+  const scoreLabels = ["0–39", "40–49", "50–59", "60–69", "70–84", "85–100"];
+  const scoreDistributionRows = scoreLabels.map((label, index) => {
+    const lo = scoreBins[index] ?? 0;
+    const hi = scoreBins[index + 1] ?? 101;
+    const attempts = attemptScores.filter((score) => {
+      const s = Math.max(0, Math.min(100, score));
+      return index === scoreLabels.length - 1 ? s >= lo && s <= 100 : s >= lo && s < hi;
+    }).length;
+    return { score_band: label, attempts };
+  });
 
   return (
     <div>
@@ -152,9 +169,20 @@ export default async function ReportingPage({
 
       <div className="mt-5 grid gap-4 lg:grid-cols-3">
         <section className="card p-5">
-          <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-            <ClipboardCheck className="size-3.5" /> Assessment outcomes
-          </h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+              <ClipboardCheck className="size-3.5" /> Assessment outcomes
+            </h2>
+            <ChartExportButton
+              filename={`${scopeLabel}-assessment-outcomes`}
+              rows={[
+                { outcome: "Passed", attempts: report.passedAttempts },
+                { outcome: "Below pass mark", attempts: Math.max(0, report.scoredAttempts - report.passedAttempts) },
+                { outcome: "In progress", attempts: report.inProgress },
+                { outcome: "Awaiting grading", attempts: report.pendingGrading },
+              ]}
+            />
+          </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">{report.passedAttempts} passed</p>
           <p className="mb-3 text-[11px] text-slate-400">
             {report.pendingGrading} awaiting grading · {report.inProgress} in progress
@@ -178,9 +206,20 @@ export default async function ReportingPage({
         </section>
 
         <section className="card p-5">
-          <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-            <CalendarCheck className="size-3.5" /> Attendance mix
-          </h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+              <CalendarCheck className="size-3.5" /> Attendance mix
+            </h2>
+            <ChartExportButton
+              filename={`${scopeLabel}-attendance-mix`}
+              rows={[
+                { status: "Present", records: report.attendance.PRESENT },
+                { status: "Late", records: report.attendance.LATE },
+                { status: "Absent", records: report.attendance.ABSENT },
+                { status: "Excused", records: report.attendance.EXCUSED },
+              ]}
+            />
+          </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">{report.attendanceRate}%</p>
           <p className="mb-3 text-[11px] text-slate-400">Present or late, excluding excused absences</p>
           <SegmentedBar
@@ -200,9 +239,18 @@ export default async function ReportingPage({
         </section>
 
         <section className="card p-5">
-          <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-            <FileBarChart className="size-3.5" /> Success outlook
-          </h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+              <FileBarChart className="size-3.5" /> Success outlook
+            </h2>
+            <ChartExportButton
+              filename={`${scopeLabel}-success-outlook`}
+              rows={RISK_BANDS.map((band) => ({
+                outlook_band: RISK_META[band].label,
+                learners: report.riskBands[band],
+              }))}
+            />
+          </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">{report.averageOutlook}%</p>
           <p className="mb-3 text-[11px] text-slate-400">Explainable local estimate, no API key required</p>
           <SegmentedBar
@@ -221,6 +269,107 @@ export default async function ReportingPage({
             ))}
           </div>
         </section>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Course performance comparison"
+          subtitle="Average score and pass rate by course"
+          action={
+            <ChartExportButton
+              filename={`${scopeLabel}-course-performance-chart`}
+              rows={report.courseRows.map((row) => ({
+                course: row.title,
+                average_score: row.averageScore,
+                pass_rate: row.passRate,
+                attendance_rate: row.attendanceRate,
+                lesson_completion: row.lessonCompletion,
+                learners: row.learners,
+              }))}
+            />
+          }
+        >
+          <HorizontalBarChart
+            data={report.courseRows.slice(0, 8).map((row) => ({
+              label: row.title.length > 24 ? `${row.title.slice(0, 24)}…` : row.title,
+              value: row.averageScore,
+              secondary: row.passRate,
+              color:
+                row.averageScore >= 70 ? "bg-emerald-500" : row.averageScore >= 50 ? "bg-amber-500" : "bg-rose-500",
+            }))}
+            empty="No course data to chart yet."
+          />
+          <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-slate-500">
+            <span className="flex items-center gap-1.5"><i className="h-2 w-3 rounded-full bg-slate-400" /> Avg score</span>
+            <span className="flex items-center gap-1.5"><i className="h-1.5 w-3 rounded-full bg-emerald-500" /> Pass rate</span>
+          </div>
+        </ChartCard>
+        <ChartCard
+          title="Attempt score distribution"
+          subtitle="Spread of submitted and graded attempt scores"
+          action={
+            <ChartExportButton
+              filename={`${scopeLabel}-attempt-score-distribution`}
+              rows={scoreDistributionRows}
+            />
+          }
+        >
+          <ScoreDistributionChart
+            scores={report.attemptRows
+              .filter((attempt) => attempt.status !== "IN_PROGRESS")
+              .map((attempt) => attempt.score)}
+          />
+        </ChartCard>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Attendance by course"
+          subtitle="Attendance rate across courses in scope"
+          action={
+            <ChartExportButton
+              filename={`${scopeLabel}-attendance-by-course`}
+              rows={report.courseRows.map((row) => ({
+                course: row.title,
+                attendance_rate: row.attendanceRate,
+                learners: row.learners,
+              }))}
+            />
+          }
+        >
+          <BarChart
+            data={report.courseRows.slice(0, 8).map((row) => ({
+              label: row.title.length > 12 ? `${row.title.slice(0, 12)}…` : row.title,
+              value: row.attendanceRate,
+              color: row.attendanceRate >= 80 ? "bg-emerald-500" : row.attendanceRate >= 60 ? "bg-amber-500" : "bg-rose-500",
+            }))}
+            empty="No attendance data to chart yet."
+          />
+        </ChartCard>
+        <ChartCard
+          title="Learner success outlook bands"
+          subtitle="Number of learners in each outlook band"
+          action={
+            <ChartExportButton
+              filename={`${scopeLabel}-success-outlook-bands`}
+              rows={RISK_BANDS.map((band) => ({
+                outlook_band: RISK_META[band].label,
+                learners: report.riskBands[band],
+              }))}
+            />
+          }
+        >
+          <BarChart
+            data={RISK_BANDS.map((band) => ({
+              label: RISK_META[band].label,
+              value: report.riskBands[band],
+              color: RISK_META[band].bar,
+            }))}
+            max={Math.max(1, ...RISK_BANDS.map((band) => report.riskBands[band]))}
+            valueSuffix=""
+            empty="No learner outlook data yet."
+          />
+        </ChartCard>
       </div>
 
       <section className="card mt-5 overflow-hidden">

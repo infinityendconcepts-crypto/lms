@@ -3,19 +3,105 @@ import {
   AlertTriangle,
   ArrowRight,
   BookOpen,
+  BrainCircuit,
   CalendarClock,
+  CheckCircle2,
   ClipboardCheck,
   GraduationCap,
+  Lightbulb,
   Plus,
+  ShieldAlert,
   Sparkles,
   Users,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireTenant, canTeach } from "@/lib/tenant";
 import { Avatar, Badge, EmptyState, PageHeader, Progress, Stat, StatusBadge } from "@/components/ui";
-import { formatDate, pct } from "@/lib/utils";
+import { BarChart, ChartCard, DonutChart, HorizontalBarChart, ScoreDistributionChart } from "@/components/charts";
+import { RISK_META, asRiskBand, type RiskBand } from "@/lib/ai/format";
+import { formatDate, pct, timeAgo } from "@/lib/utils";
 
 export const metadata = { title: "Overview" };
+
+type LearnerRiskSnapshot = {
+  courseTitles?: string[];
+  attendance?: {
+    registers?: number;
+    attendanceRate?: number | null;
+    recentRate?: number | null;
+    absenceStreak?: number;
+    excusedShare?: number | null;
+  };
+  grades?: {
+    average?: number | null;
+    passRate?: number | null;
+    trend?: number | null;
+    overdueAssessments?: number;
+    lateSubmissions?: number;
+    assessmentCompletion?: number | null;
+    publishedAssessments?: number;
+    gradedAttempts?: number;
+  };
+  learning?: {
+    lessonsCompleted?: number;
+    lessonsPublished?: number;
+    lessonCompletion?: number | null;
+  };
+  engagement?: { daysSinceLastActivity?: number | null; activeDays30?: number };
+};
+
+function readLearnerRiskJson<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? (parsed as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function learnerMitigationSuggestions(band: RiskBand, features: LearnerRiskSnapshot): string[] {
+  const tips: string[] = [];
+  const attendance = features.attendance ?? {};
+  const grades = features.grades ?? {};
+  const learning = features.learning ?? {};
+  const engagement = features.engagement ?? {};
+
+  if ((attendance.attendanceRate ?? 100) < 80 || (attendance.absenceStreak ?? 0) >= 2) {
+    tips.push("Prioritize attending upcoming classes and let your teacher know early if you can't make it.");
+  }
+  if ((grades.overdueAssessments ?? 0) > 0 || (grades.assessmentCompletion ?? 100) < 70) {
+    tips.push("Check for missing or overdue assessments and submit them as soon as you can.");
+  }
+  if ((grades.average ?? 100) < 60 || (grades.passRate ?? 100) < 60) {
+    tips.push("Review feedback on recent attempts and focus practice on topics where you lost marks.");
+  }
+  if ((grades.trend ?? 0) <= -5) {
+    tips.push("Your recent scores dipped—revisit lesson materials and ask for help on tricky areas.");
+  }
+  if ((grades.lateSubmissions ?? 0) > 0) {
+    tips.push("Plan ahead for deadlines so you have time to submit work on time.");
+  }
+  if ((engagement.daysSinceLastActivity ?? 0) > 7) {
+    tips.push("Log in regularly and complete a small task each day to rebuild momentum.");
+  }
+  if ((learning.lessonCompletion ?? 100) < 60 && (learning.lessonsPublished ?? 0) > 0) {
+    tips.push("Work through unfinished lessons step by step to stay caught up.");
+  }
+  if ((attendance.excusedShare ?? 0) >= 25) {
+    tips.push("Follow up on missed sessions and complete any make-up work shared by your teacher.");
+  }
+
+  if (tips.length === 0) {
+    if (band === "ON_TRACK") {
+      tips.push("Keep up your current routine and ask your teacher for extension work if you want a challenge.");
+    } else {
+      tips.push("Keep checking your tasks and reach out to your teacher if anything is unclear or difficult.");
+    }
+  }
+
+  return tips.slice(0, 4);
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -37,7 +123,7 @@ export default async function DashboardPage({
           : null;
 
   if (!teacher) {
-    const [enrollments, attempts, completed] = await Promise.all([
+    const [enrollments, attempts, completed, riskBenchmark] = await Promise.all([
       db.enrollment.findMany({
         where: { userId: ctx.user.id, tenantId: ctx.tenant.id },
         include: {
@@ -62,6 +148,10 @@ export default async function DashboardPage({
         take: 6,
       }),
       db.lessonCompletion.count({ where: { userId: ctx.user.id } }),
+      db.successBenchmark.findFirst({
+        where: { tenantId: ctx.tenant.id, studentId: ctx.user.id },
+        orderBy: { createdAt: "desc" },
+      }),
     ]);
 
     const scored = attempts.filter((a) => a.score !== null && a.maxScore > 0);
@@ -73,6 +163,30 @@ export default async function DashboardPage({
       .flatMap((e) => e.course.assessments.map((a) => ({ ...a, course: e.course })))
       .filter((a) => !a.dueAt || a.dueAt > new Date())
       .slice(0, 4);
+
+    const progressChartData = enrollments.map(({ course, progress }) => ({
+      label: course.title.length > 18 ? `${course.title.slice(0, 18)}…` : course.title,
+      value: progress,
+      color: progress >= 80 ? "bg-emerald-500" : progress >= 40 ? "bg-brand-500" : "bg-amber-500",
+    }));
+    const scoreChartData = attempts
+      .filter((a) => a.status === "GRADED" && a.maxScore > 0)
+      .slice(0, 6)
+      .reverse()
+      .map((a) => ({
+        label: a.assessment.title.length > 12 ? `${a.assessment.title.slice(0, 12)}…` : a.assessment.title,
+        value: pct(a.score, a.maxScore),
+        color: pct(a.score, a.maxScore) >= 60 ? "bg-emerald-500" : "bg-rose-500",
+      }));
+
+    const riskBand = riskBenchmark ? asRiskBand(riskBenchmark.riskBand) : null;
+    const riskMeta = riskBand ? RISK_META[riskBand] : null;
+    const riskFeatures = readLearnerRiskJson<LearnerRiskSnapshot>(riskBenchmark?.features, {});
+    const riskSuggestions = riskBand ? learnerMitigationSuggestions(riskBand, riskFeatures) : [];
+    const riskSummary =
+      typeof riskBenchmark?.summary === "string" && riskBenchmark.summary.trim()
+        ? riskBenchmark.summary.trim()
+        : null;
 
     return (
       <div>
@@ -106,6 +220,99 @@ export default async function DashboardPage({
           <Stat label="Average score" value={`${average}%`} hint={`${scored.length} graded attempts`} />
           <Stat label="Upcoming work" value={upcoming.length} hint="published assessments" icon={<CalendarClock className="size-4" />} />
         </div>
+
+        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          <ChartCard title="Course progress" subtitle="How far you are in each enrolled course">
+            <HorizontalBarChart
+              data={progressChartData}
+              empty="Enroll in a course to see your progress chart."
+            />
+          </ChartCard>
+          <ChartCard title="Recent scores" subtitle="Your latest graded assessment results">
+            <BarChart
+              data={scoreChartData}
+              empty="Complete and get graded on assessments to see score trends."
+              colorClass="bg-brand-500"
+            />
+          </ChartCard>
+        </div>
+
+        {riskBenchmark && riskBand && riskMeta && (
+          <section className="mt-8">
+            <div className="card overflow-hidden">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <BrainCircuit className="size-3.5 text-brand-600" /> Learning progress check
+                  </p>
+                  <h2 className="mt-1 text-sm font-bold text-slate-900">
+                    Your current support level: <span className={riskMeta.text}>{riskMeta.label}</span>
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Based on attendance, grades, submissions, and engagement
+                    {riskBenchmark.createdAt ? ` · updated ${timeAgo(riskBenchmark.createdAt)}` : ""}.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">On-track likelihood</p>
+                    <p className={`text-2xl font-bold ${riskMeta.text}`}>{Math.round(riskBenchmark.successProbability)}%</p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                      riskMeta.tone === "green"
+                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                        : riskMeta.tone === "amber"
+                          ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                          : "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
+                    }`}
+                  >
+                    <ShieldAlert className="size-3.5" />
+                    {riskMeta.label}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-5 p-5 lg:grid-cols-[1.1fr_1fr]">
+                <div>
+                  <div className="mb-3 h-2.5 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={`h-full rounded-full ${riskMeta.bar}`}
+                      style={{ width: `${Math.max(4, Math.min(100, Math.round(riskBenchmark.successProbability)))}%` }}
+                    />
+                  </div>
+                  {riskBenchmark.headline ? (
+                    <p className="text-sm font-semibold text-slate-900">{riskBenchmark.headline}</p>
+                  ) : null}
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    {riskSummary || riskMeta.description}
+                  </p>
+                  <p className="mt-3 text-[11px] text-slate-400">
+                    This is a supportive estimate to help you plan next steps, not a final judgment.
+                    {typeof riskBenchmark.confidence === "number" ? ` Confidence: ${Math.round(riskBenchmark.confidence)}%.` : ""}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                  <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+                    <Lightbulb className="size-3.5 text-amber-500" /> Mitigation suggestions
+                  </h3>
+                  <ul className="mt-3 space-y-2">
+                    {riskSuggestions.map((tip, index) => (
+                      <li key={`${index}-${tip.slice(0, 16)}`} className="flex items-start gap-2 text-sm text-slate-700">
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-brand-600" />
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-[11px] text-slate-500">
+                    If you need support, talk to your teacher or course facilitator—they can help you make a plan.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         <div className="mt-8 flex items-center justify-between">
           <h2 className="text-sm font-bold tracking-tight text-slate-900">Continue learning</h2>
@@ -242,7 +449,7 @@ export default async function DashboardPage({
     );
   }
 
-  const [courses, pending, learners, assessmentCount, graded] = await Promise.all([
+  const [courses, pending, learners, assessmentCount, graded, inProgressCount] = await Promise.all([
     db.course.findMany({
       where: { tenantId: ctx.tenant.id },
       orderBy: { updatedAt: "desc" },
@@ -263,16 +470,15 @@ export default async function DashboardPage({
       where: { tenantId: ctx.tenant.id, status: "GRADED" },
       select: { score: true, maxScore: true },
     }),
+    db.attempt.count({ where: { tenantId: ctx.tenant.id, status: "IN_PROGRESS" } }),
   ]);
 
-  const average = graded.length
-    ? Math.round(graded.reduce((sum, a) => sum + pct(a.score, a.maxScore), 0) / graded.length)
+  const gradedPercents = graded.map((a) => pct(a.score, a.maxScore));
+  const average = gradedPercents.length
+    ? Math.round(gradedPercents.reduce((sum, value) => sum + value, 0) / gradedPercents.length)
     : 0;
-  const passRate = graded.length
-    ? Math.round(
-        (graded.filter((a) => pct(a.score, a.maxScore) >= 50).length / graded.length) * 100
-      )
-    : 0;
+  const passedCount = gradedPercents.filter((value) => value >= 50).length;
+  const passRate = gradedPercents.length ? Math.round((passedCount / gradedPercents.length) * 100) : 0;
 
   return (
     <div>
@@ -325,6 +531,36 @@ export default async function DashboardPage({
           icon={<GraduationCap className="size-4" />}
         />
         <Stat label="Average score" value={`${average}%`} hint={`${passRate}% pass rate`} icon={<ClipboardCheck className="size-4" />} />
+      </div>
+
+      <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        <ChartCard title="Assessment outcomes" subtitle="Graded, pending and in-progress attempts">
+          <DonutChart
+            segments={[
+              { label: "Passed", value: passedCount, color: "text-emerald-500" },
+              { label: "Below pass", value: Math.max(0, gradedPercents.length - passedCount), color: "text-rose-500" },
+              { label: "Awaiting grading", value: pending.length, color: "text-amber-500" },
+              { label: "In progress", value: inProgressCount, color: "text-slate-400" },
+            ]}
+            centerValue={`${average}%`}
+            centerLabel="average"
+          />
+        </ChartCard>
+        <ChartCard title="Score distribution" subtitle="How graded attempts are spread across score bands">
+          <ScoreDistributionChart scores={gradedPercents} />
+        </ChartCard>
+        <ChartCard title="Learners by course" subtitle="Enrollment across your most recent courses">
+          <BarChart
+            data={courses.map((course) => ({
+              label: course.title.length > 12 ? `${course.title.slice(0, 12)}…` : course.title,
+              value: course._count.enrollments,
+              color: "bg-brand-500",
+            }))}
+            max={Math.max(1, ...courses.map((course) => course._count.enrollments))}
+            valueSuffix=""
+            empty="Create courses and enroll learners to see this chart."
+          />
+        </ChartCard>
       </div>
 
       <div className="mt-8 grid gap-4 lg:grid-cols-[1.35fr_1fr]">
