@@ -234,6 +234,21 @@ export default async function LandingPage({
         </div>
       </section>
 
+      {/* Intro */}
+      <section className="relative overflow-hidden border-b border-slate-100 bg-gradient-to-b from-white to-brand-50/30">
+        <div className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 sm:py-20">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-brand-600 uppercase">
+            Our name, our purpose
+          </p>
+          <p className="mt-5 text-lg leading-8 text-slate-700 sm:text-xl sm:leading-9">
+            <span className="font-semibold text-slate-900">Nkanyezi means &lsquo;Star&rsquo;</span> — a symbol of brilliance, hope, and limitless potential. We believe that every learner carries a unique light waiting to shine. Through education, innovation, and empowerment, we ignite curiosity, unlock potential, and unveil the star within every learner, inspiring them to shine brighter and reach beyond their dreams.
+          </p>
+          <p className="mt-6 text-sm font-bold tracking-wide text-brand-700 sm:text-base">
+            NKANYEZI – Unveiling the Star in Every Learner.
+          </p>
+        </div>
+      </section>
+
       {/* Features */}
       <section id="features" className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <div className="max-w-2xl">
