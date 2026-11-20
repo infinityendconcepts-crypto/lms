@@ -636,10 +636,10 @@ const FORMAT_BUTTONS: {
   { action: "bold", label: "Bold", title: "Bold", icon: Bold },
   { action: "italic", label: "Italic", title: "Italic", icon: Italic },
   {
-    action: "strikethrough",
-    label: "Strikethrough",
-    title: "Strikethrough",
-    icon: Strikethrough,
+    action: "underline",
+    label: "Underline",
+    title: "Underline",
+    icon: Underline,
   },
   { action: "bullet", label: "Bulleted list", title: "Bulleted list", icon: List },
   {
@@ -869,8 +869,8 @@ function AdvancedToolbar({
 
       <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
 
-      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("underline")} title="Underline" aria-label="Underline" className={iconButton}>
-        <Underline className="size-3.5" />
+      <button type="button" onMouseDown={keepSelection} onClick={() => onAction("strikethrough")} title="Strikethrough" aria-label="Strikethrough" className={iconButton}>
+        <Strikethrough className="size-3.5" />
       </button>
       <button type="button" onMouseDown={keepSelection} onClick={() => onAction("alignLeft")} title="Align left" aria-label="Align left" className={iconButton}>
         <AlignLeft className="size-3.5" />
