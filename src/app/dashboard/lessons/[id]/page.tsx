@@ -21,7 +21,8 @@ import { Badge, StatusBadge } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LessonContentFields } from "@/components/dashboard/LessonContentFields";
 import { UploadField } from "@/components/UploadField";
-import { MathText } from "@/components/MathText";
+import { LessonBlocks } from "@/components/LessonBlocks";
+import { parseLessonBlocks } from "@/lib/lesson-blocks";
 import { AiContentAssist } from "@/components/ai/AiContentAssist";
 import { providerOptions } from "@/lib/ai/benchmark";
 import { formatBytes } from "@/lib/storage";
@@ -49,7 +50,7 @@ export default async function LessonEditorPage({
           lessons: { orderBy: { order: "asc" } },
           codePads: {
             orderBy: { order: "asc" },
-            select: { id: true, title: true, language: true },
+            select: { id: true, title: true, language: true, published: true },
           },
         },
       },
@@ -62,6 +63,14 @@ export default async function LessonEditorPage({
   const previous = index > 0 ? lesson.course.lessons[index - 1] : null;
   const next = index >= 0 ? lesson.course.lessons[index + 1] : null;
   const aiProviders = await providerOptions(ctx.tenant.id);
+  const previewBlocks = parseLessonBlocks(lesson.contentBlocks, {
+    content: lesson.content,
+    meetingUrl: lesson.meetingUrl,
+    codePadId: lesson.codePadId,
+    videoAttachments: lesson.attachments
+      .filter((file) => file.kind === "video")
+      .map((file) => ({ id: file.id, name: file.name })),
+  });
 
   return (
     <div>
@@ -171,9 +180,16 @@ export default async function LessonEditorPage({
             <div className="border-t border-slate-100 pt-4">
               <LessonContentFields
                 content={lesson.content}
+                contentBlocks={lesson.contentBlocks}
                 meetingUrl={lesson.meetingUrl}
                 codePadId={lesson.codePadId}
-                codePads={lesson.course.codePads}
+                codePads={lesson.course.codePads.map((pad) => ({
+                  id: pad.id,
+                  title: pad.title,
+                  language: pad.language,
+                }))}
+                courseId={lesson.courseId}
+                lessonId={lesson.id}
               />
             </div>
 
@@ -282,16 +298,15 @@ export default async function LessonEditorPage({
           <div className="card p-5">
             <h2 className="text-sm font-bold text-slate-900">Lesson content preview</h2>
             <p className="mt-1 text-[11px] text-slate-500">
-              Exactly what learners see, with math and formatting rendered.
+              A live look at the block layout learners will see.
             </p>
-            <div className="mt-3 max-h-[420px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 thin-scroll">
-              {lesson.content.trim() ? (
-                <MathText content={lesson.content} />
-              ) : (
-                <p className="text-xs text-slate-400">
-                  Nothing written yet. Add content in the editor.
-                </p>
-              )}
+            <div className="thin-scroll mt-3 max-h-[520px] space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <LessonBlocks
+                blocks={previewBlocks}
+                courseId={lesson.courseId}
+                codePads={lesson.course.codePads}
+                teacher
+              />
             </div>
           </div>
 

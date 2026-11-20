@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ImagePlus, Loader2, Paperclip, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Uploaded = { url: string; name: string; kind: string; size: number };
+type Uploaded = { id?: string; url: string; name: string; kind: string; size: number };
 
 export function UploadField({
   name = "url",

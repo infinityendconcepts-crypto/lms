@@ -7,6 +7,13 @@ import { requireTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { getPlanState } from "@/lib/usage";
 import { removeUpload } from "@/lib/storage";
+import {
+  blocksToCodePadId,
+  blocksToMarkdown,
+  blocksToMeetingUrl,
+  parseLessonBlocks,
+  sanitizeBlocksForSave,
+} from "@/lib/lesson-blocks";
 
 async function courseInTenant(courseId: string, tenantId: string) {
   const course = await db.course.findFirst({ where: { id: courseId, tenantId } });
@@ -156,21 +163,35 @@ export async function updateLessonAction(formData: FormData) {
     include: { course: true },
   });
   if (!lesson || lesson.course.tenantId !== ctx.tenant.id) throw new Error("Lesson not found");
-  const codePadId = await lessonCodePadId({
-    courseId: lesson.courseId,
-    tenantId: ctx.tenant.id,
-    formData,
+  const allowedPadIds = await db.codePad.findMany({
+    where: { courseId: lesson.courseId, tenantId: ctx.tenant.id },
+    select: { id: true },
   });
+  const legacyContent = String(formData.get("content") ?? "");
+  const parsedBlocks = parseLessonBlocks(String(formData.get("contentBlocks") ?? ""), {
+    content: legacyContent,
+    meetingUrl: String(formData.get("meetingUrl") ?? ""),
+    codePadId: String(formData.get("codePadId") ?? ""),
+  });
+  const blocks = sanitizeBlocksForSave(
+    parseLessonBlocks(JSON.stringify(parsedBlocks)),
+    new Set(allowedPadIds.map((pad) => pad.id))
+  );
+  const markdown = blocksToMarkdown(blocks) || legacyContent;
+  const meetingUrl =
+    blocksToMeetingUrl(blocks) ?? (String(formData.get("meetingUrl") ?? "").trim() || null);
+  const codePadId = blocksToCodePadId(blocks);
 
   await db.lesson.update({
     where: { id: lessonId },
     data: {
       title: String(formData.get("title") ?? "").trim() || "Untitled lesson",
       summary: String(formData.get("summary") ?? "").trim() || null,
-      content: String(formData.get("content") ?? ""),
+      content: markdown,
+      contentBlocks: JSON.stringify(blocks),
       codePadId,
       estimatedMinutes: Math.max(1, Number(formData.get("estimatedMinutes") ?? 15) || 15),
-      meetingUrl: String(formData.get("meetingUrl") ?? "").trim() || null,
+      meetingUrl,
       published: formData.get("published") === "on",
     },
   });

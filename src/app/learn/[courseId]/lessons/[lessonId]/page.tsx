@@ -3,10 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowUpRight,
   CheckCircle2,
   Clock,
-  Code2,
   Download,
   FileText,
   GraduationCap,
@@ -16,10 +14,9 @@ import { db } from "@/lib/db";
 import { canTeach, requireTenant } from "@/lib/tenant";
 import { markLessonCompleteAction } from "@/lib/actions/course";
 import { SubmitButton } from "@/components/SubmitButton";
-import { MathText } from "@/components/MathText";
-import { LessonVideoEmbed, UploadedVideoPlayer } from "@/components/VideoPlayer";
+import { LessonBlocks } from "@/components/LessonBlocks";
+import { parseLessonBlocks } from "@/lib/lesson-blocks";
 import { formatBytes } from "@/lib/storage";
-import { parseVideoEmbed } from "@/lib/video-link";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Lesson" };
@@ -36,7 +33,14 @@ export default async function LearnLessonPage({
   const lesson = await db.lesson.findFirst({
     where: { id: lessonId, courseId, course: { tenantId: ctx.tenant.id } },
     include: {
-      course: { include: { lessons: { orderBy: { order: "asc" } } } },
+      course: {
+        include: {
+          lessons: { orderBy: { order: "asc" } },
+          codePads: {
+            select: { id: true, title: true, language: true, published: true },
+          },
+        },
+      },
       attachments: { orderBy: { createdAt: "desc" } },
     },
   });
@@ -55,12 +59,14 @@ export default async function LearnLessonPage({
   const completion = await db.lessonCompletion.findUnique({
     where: { lessonId_userId: { lessonId, userId: ctx.user.id } },
   });
-  const codePad = lesson.codePadId
-    ? await db.codePad.findFirst({
-        where: { id: lesson.codePadId, courseId, tenantId: ctx.tenant.id },
-        select: { id: true, title: true, published: true },
-      })
-    : null;
+  const blocks = parseLessonBlocks(lesson.contentBlocks, {
+    content: lesson.content,
+    meetingUrl: lesson.meetingUrl,
+    codePadId: lesson.codePadId,
+    videoAttachments: lesson.attachments
+      .filter((file) => file.kind === "video")
+      .map((file) => ({ id: file.id, name: file.name })),
+  });
 
   const index = lesson.course.lessons.findIndex((l) => l.id === lesson.id);
   const previous = index > 0 ? lesson.course.lessons[index - 1] : null;
@@ -106,56 +112,14 @@ export default async function LearnLessonPage({
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{lesson.title}</h1>
         {lesson.summary && <p className="mt-1 text-sm leading-6 text-slate-500">{lesson.summary}</p>}
 
-        {lesson.meetingUrl && parseVideoEmbed(lesson.meetingUrl) ? (
-          <LessonVideoEmbed url={lesson.meetingUrl} />
-        ) : (
-          lesson.meetingUrl && (
-            <a
-              href={lesson.meetingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 flex items-center gap-2 rounded-2xl border border-brand-200 bg-brand-50/70 px-4 py-3 text-sm font-semibold text-brand-800 hover:bg-brand-50"
-            >
-              <ArrowUpRight className="size-4" /> Open lesson link
-            </a>
-          )
-        )}
-
-        {codePad && (teacher || codePad.published) && (
-          <Link
-            href={`/learn/${courseId}/pads/${codePad.id}`}
-            className="mt-3 flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3 text-sm font-semibold text-sky-800 hover:bg-sky-50"
-          >
-            <Code2 className="size-4" /> Open coding pad: {codePad.title}
-          </Link>
-        )}
-
-        {lesson.attachments.some((file) => file.kind === "video") && (
-          <section className="mt-5 space-y-4">
-            {lesson.attachments
-              .filter((file) => file.kind === "video")
-              .map((file) => (
-                <UploadedVideoPlayer key={file.id} attachmentId={file.id} name={file.name} />
-              ))}
-          </section>
-        )}
-
-        <article className="card mt-5 overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3 sm:px-8">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Lesson content
-            </h2>
-          </div>
-          <div className="px-5 py-6 sm:px-8 sm:py-8">
-            {lesson.content ? (
-              <MathText content={lesson.content} />
-            ) : (
-              <p className="text-sm italic text-slate-400">
-                No lesson content has been added yet.
-              </p>
-            )}
-          </div>
-        </article>
+        <div className="mt-6">
+          <LessonBlocks
+            blocks={blocks}
+            courseId={courseId}
+            codePads={lesson.course.codePads}
+            teacher={teacher}
+          />
+        </div>
 
         {lesson.attachments.some((file) => file.kind !== "video") && (
           <section className="card mt-5 overflow-hidden">

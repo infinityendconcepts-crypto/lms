@@ -1004,6 +1004,8 @@ export function setFormFieldValue(name: string, value: string) {
 export function RichTextEditor({
   name,
   defaultValue = "",
+  value: controlledValue,
+  onChange,
   placeholder = "Write your content with Markdown formatting.",
   rows = 8,
   required = false,
@@ -1011,20 +1013,25 @@ export function RichTextEditor({
 }: {
   name: string;
   defaultValue?: string;
+  value?: string;
+  onChange?: (value: string) => void;
   placeholder?: string;
   rows?: number;
   required?: boolean;
   label?: string;
 }) {
+  const initialValue = controlledValue ?? defaultValue;
   const ref = useRef<HTMLTextAreaElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const skipEditorSync = useRef(false);
-  const lastRenderedValueRef = useRef(defaultValue);
+  const lastRenderedValueRef = useRef(initialValue);
   const savedRangeRef = useRef<Range | null>(null);
   const toolbarInteractionRef = useRef(false);
   const linkAnchorRef = useRef<HTMLAnchorElement | null>(null);
-  const [value, setValue] = useState(defaultValue);
+  const [value, setValue] = useState(initialValue);
+  const [lastControlledValue, setLastControlledValue] = useState(controlledValue);
+  const onChangeRef = useRef(onChange);
   const [mode, setMode] = useState<"visual" | "code">("visual");
   const [preview, setPreview] = useState(false);
   const [mathEnabled, setMathEnabled] = useState(false);
@@ -1036,6 +1043,20 @@ export function RichTextEditor({
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkEditing, setLinkEditing] = useState(false);
   const [linkUrl, setLinkUrl] = useState("https://");
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    onChangeRef.current?.(value);
+  }, [value]);
+
+  // Sync controlled parents during render (React's derived-state pattern).
+  if (controlledValue !== undefined && controlledValue !== lastControlledValue) {
+    setLastControlledValue(controlledValue);
+    setValue(controlledValue);
+  }
 
   useEffect(() => {
     if (mode !== "visual" || preview) return;

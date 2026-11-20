@@ -291,6 +291,7 @@ model Lesson {
   title            String
   summary          String?
   content          String   @default("")
+  contentBlocks    String   @default("[]")
   estimatedMinutes Int      @default(15)
   order            Int      @default(0)
   published        Boolean  @default(false)
