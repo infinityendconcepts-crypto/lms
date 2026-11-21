@@ -36,8 +36,15 @@ export default async function DashboardLayout({
     updatedAt: m.tenant.logoUpdatedAt?.toISOString() ?? null,
   }));
 
+  const kindLabel =
+    ctx.tenant.kind === "TEACHER"
+      ? "Teacher workspace"
+      : ctx.tenant.kind === "CRECHE"
+        ? "Creche workspace"
+        : "School workspace";
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" data-workspace-kind={ctx.tenant.kind}>
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col border-r border-slate-200/80 bg-slate-50/80 px-4 py-5 backdrop-blur-xl lg:flex">
         <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
           <WorkspaceLogo
@@ -55,7 +62,7 @@ export default async function DashboardLayout({
               {ctx.tenant.name}
             </span>
             <span className="block text-[10px] font-medium tracking-wide text-slate-400 uppercase">
-              {ctx.tenant.kind === "TEACHER" ? "Teacher workspace" : "School workspace"}
+              {kindLabel}
             </span>
           </span>
         </Link>

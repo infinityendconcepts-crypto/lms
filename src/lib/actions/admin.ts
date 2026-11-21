@@ -37,7 +37,8 @@ export async function createAdminWorkspaceAction(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const slugRaw = String(formData.get("slug") ?? "").trim();
-  const kind = String(formData.get("kind") ?? "SCHOOL") === "TEACHER" ? "TEACHER" : "SCHOOL";
+  const kindRaw = String(formData.get("kind") ?? "SCHOOL");
+  const kind = kindRaw === "TEACHER" ? "TEACHER" : kindRaw === "CRECHE" ? "CRECHE" : "SCHOOL";
   const planId = String(formData.get("plan") ?? "") as PlanId;
   const statusRaw = String(formData.get("status") ?? "TRIALING");
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim().toLowerCase();
@@ -86,12 +87,14 @@ export async function createAdminWorkspaceAction(formData: FormData) {
       name: name.slice(0, 80),
       slug,
       kind,
-      brandColor: "#4f46e5",
+      brandColor: kind === "CRECHE" ? "#F97316" : "#4f46e5",
       currency,
       headline:
         kind === "TEACHER"
           ? "Independent teaching workspace."
-          : "A focused learning workspace on Nkanyezi LMS.",
+          : kind === "CRECHE"
+            ? "A playful, child-friendly learning space on Nkanyezi LMS."
+            : "A focused learning workspace on Nkanyezi LMS.",
       trialEndsAt,
       subscription: {
         create: {

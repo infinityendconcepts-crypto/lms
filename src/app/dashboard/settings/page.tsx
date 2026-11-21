@@ -89,7 +89,7 @@ export default async function SettingsPage({
             <div>
               <dt className="text-slate-400">Workspace type</dt>
               <dd className="font-semibold text-slate-800">
-                {ctx.tenant.kind === "TEACHER" ? "Independent teacher" : "School"}
+                {ctx.tenant.kind === "TEACHER" ? "Independent teacher" : ctx.tenant.kind === "CRECHE" ? "Creche" : "School"}
               </dd>
             </div>
             <div>
@@ -338,7 +338,7 @@ export default async function SettingsPage({
                   <div>
                     <p className="text-sm font-bold">{ctx.tenant.name}</p>
                     <p className="text-[10px] text-slate-300">
-                      {ctx.tenant.kind === "TEACHER" ? "Teacher workspace" : "School workspace"}
+                      {ctx.tenant.kind === "TEACHER" ? "Teacher workspace" : ctx.tenant.kind === "CRECHE" ? "Creche workspace" : "School workspace"}
                     </p>
                   </div>
                 </div>

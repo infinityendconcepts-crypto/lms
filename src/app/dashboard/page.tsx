@@ -520,7 +520,7 @@ export default async function DashboardPage({
         <Stat
           label="Learners"
           value={learners}
-          hint={`${ctx.tenant.kind === "TEACHER" ? "in your studio" : "across the school"}`}
+          hint={`${ctx.tenant.kind === "TEACHER" ? "in your studio" : ctx.tenant.kind === "CRECHE" ? "across the creche" : "across the school"}`}
           icon={<Users className="size-4" />}
         />
         <Stat label="Courses" value={courses.length} hint={`${assessmentCount} assessments`} icon={<BookOpen className="size-4" />} />

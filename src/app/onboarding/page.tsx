@@ -51,7 +51,7 @@ export default async function OnboardingPage({
             </div>
             <div>
               <span className="label">Workspace type</span>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 <label className="cursor-pointer rounded-xl border border-slate-200 p-3 text-sm has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50">
                   <input type="radio" name="kind" value="SCHOOL" defaultChecked className="mr-2" />
                   School
@@ -59,6 +59,11 @@ export default async function OnboardingPage({
                 <label className="cursor-pointer rounded-xl border border-slate-200 p-3 text-sm has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50">
                   <input type="radio" name="kind" value="TEACHER" className="mr-2" />
                   Solo teacher
+                </label>
+                <label className="cursor-pointer rounded-xl border border-orange-200 bg-orange-50/40 p-3 text-sm has-[:checked]:border-orange-400 has-[:checked]:bg-orange-50">
+                  <input type="radio" name="kind" value="CRECHE" className="mr-2" />
+                  <span className="font-medium">Creche</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-500">Playful, child-friendly</span>
                 </label>
               </div>
             </div>

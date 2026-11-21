@@ -215,6 +215,138 @@ details:not([open]) > *:not(summary) {
   border-radius: 9999px;
 }
 
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-up {
+  opacity: 0;
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-fade-in {
+  opacity: 0;
+  animation: fade-in 0.7s ease forwards;
+}
+
+.animate-scale-in {
+  opacity: 0;
+  animation: scale-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-float-soft {
+  animation: float-soft 6s ease-in-out infinite;
+}
+
+.delay-100 { animation-delay: 100ms; transition-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; transition-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; transition-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; transition-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; transition-delay: 500ms; }
+.delay-600 { animation-delay: 600ms; transition-delay: 600ms; }
+
+.reveal {
+  opacity: 0;
+  will-change: opacity, transform;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+[data-hero] {
+  opacity: 0;
+}
+
+@media (scripting: none) {
+  [data-hero],
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-float-soft,
+  .reveal,
+  [data-hero] {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+
+/* Creche workspace theme: playful, warm, child-friendly */
+[data-workspace-kind="CRECHE"] {
+  --color-brand-50: #fff7ed;
+  --color-brand-100: #ffedd5;
+  --color-brand-200: #fed7aa;
+  --color-brand-300: #fdba74;
+  --color-brand-400: #fb923c;
+  --color-brand-500: #f97316;
+  --color-brand-600: #ea580c;
+  --color-brand-700: #c2410c;
+  --color-brand-800: #9a3412;
+  --color-brand-900: #7c2d12;
+  --color-brand-950: #431407;
+  --color-canvas: #fffaf5;
+}
+
+[data-workspace-kind="CRECHE"] .card,
+[data-workspace-kind="CRECHE"] .btn,
+[data-workspace-kind="CRECHE"] .btn-primary,
+[data-workspace-kind="CRECHE"] .btn-secondary,
+[data-workspace-kind="CRECHE"] .btn-ghost,
+[data-workspace-kind="CRECHE"] .btn-danger,
+[data-workspace-kind="CRECHE"] .input,
+[data-workspace-kind="CRECHE"] .select,
+[data-workspace-kind="CRECHE"] .textarea {
+  border-radius: 1rem;
+}
+
+[data-workspace-kind="CRECHE"] .card {
+  border-color: #fde68a;
+  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.06);
+}
+
+[data-workspace-kind="CRECHE"] .badge {
+  border-radius: 999px;
+  font-weight: 700;
+}
 @media print {
   .no-print {
     display: none !important;

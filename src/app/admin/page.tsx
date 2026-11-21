@@ -189,7 +189,7 @@ export default async function AdminPage({
           <Stat
             label="Workspaces"
             value={tenants.length}
-            hint={`${tenants.filter((t) => t.kind === "SCHOOL").length} schools · ${tenants.filter((t) => t.kind === "TEACHER").length} solo teachers`}
+            hint={`${tenants.filter((t) => t.kind === "SCHOOL").length} schools · ${tenants.filter((t) => t.kind === "TEACHER").length} solo teachers · ${tenants.filter((t) => t.kind === "CRECHE").length} creches`}
             icon={<Building2 className="size-4" />}
           />
           <Stat
@@ -293,6 +293,7 @@ export default async function AdminPage({
                     <select id="admin-workspace-kind" name="kind" className="select">
                       <option value="SCHOOL">School</option>
                       <option value="TEACHER">Solo teacher</option>
+                      <option value="CRECHE">Creche</option>
                     </select>
                   </div>
                   <div>
@@ -380,8 +381,8 @@ export default async function AdminPage({
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="truncate text-sm font-bold text-slate-900">{tenant.name}</p>
-                          <Badge tone={tenant.kind === "SCHOOL" ? "brand" : "sky"}>
-                            {tenant.kind === "SCHOOL" ? "School" : "Teacher"}
+                          <Badge tone={tenant.kind === "SCHOOL" ? "brand" : tenant.kind === "CRECHE" ? "amber" : "sky"}>
+                            {tenant.kind === "SCHOOL" ? "School" : tenant.kind === "CRECHE" ? "Creche" : "Teacher"}
                           </Badge>
                           {tenant.suspended && <Badge tone="red">Suspended</Badge>}
                           {showTrial && <Badge tone="amber">Trial · {days}d left</Badge>}
@@ -520,6 +521,7 @@ export default async function AdminPage({
                             >
                               <option value="SCHOOL">School</option>
                               <option value="TEACHER">Solo teacher</option>
+                              <option value="CRECHE">Creche</option>
                             </select>
                           </div>
                           <div>

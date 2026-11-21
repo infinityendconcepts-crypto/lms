@@ -89,7 +89,7 @@ model Tenant {
   id             String    @id @default(cuid())
   slug           String    @unique
   name           String
-  kind           String    @default("SCHOOL") // SCHOOL | TEACHER
+  kind           String    @default("SCHOOL") // SCHOOL | TEACHER | CRECHE
   logoUrl        String?
   logoStorageKey String?
   logoMimeType   String?

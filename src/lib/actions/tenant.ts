@@ -391,7 +391,8 @@ export async function acceptInviteAction(
 export async function createWorkspaceAction(formData: FormData) {
   const session = await requireUser();
   const name = String(formData.get("name") ?? "").trim();
-  const kind = String(formData.get("kind") ?? "SCHOOL") === "TEACHER" ? "TEACHER" : "SCHOOL";
+  const kindRaw = String(formData.get("kind") ?? "SCHOOL");
+  const kind = kindRaw === "TEACHER" ? "TEACHER" : kindRaw === "CRECHE" ? "CRECHE" : "SCHOOL";
   if (name.length < 2) redirect("/onboarding?error=1");
 
   const base = slugify(name) || "workspace";
@@ -419,6 +420,13 @@ export async function createWorkspaceAction(formData: FormData) {
       name,
       slug,
       kind,
+      brandColor: kind === "CRECHE" ? "#F97316" : "#4f46e5",
+      headline:
+        kind === "CRECHE"
+          ? "A playful, child-friendly learning space on Nkanyezi LMS."
+          : kind === "TEACHER"
+            ? "Independent teaching workspace."
+            : "A focused learning workspace on Nkanyezi LMS.",
       trialEndsAt,
       subscription: {
         create: {
