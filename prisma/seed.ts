@@ -207,6 +207,23 @@ async function main() {
       timezone: "America/New_York",
     },
   });
+  const lindiwe = await db.user.create({
+    data: {
+      email: "teacher@sunnydays.creche",
+      name: "Lindiwe Dlamini",
+      passwordHash,
+      timezone: "Africa/Johannesburg",
+    },
+  });
+  const amo = await db.user.create({
+    data: { email: "amo@sunnydays.creche", name: "Amo Mokoena", passwordHash },
+  });
+  const zoe = await db.user.create({
+    data: { email: "zoe@sunnydays.creche", name: "Zoe van Wyk", passwordHash },
+  });
+  const mila = await db.user.create({
+    data: { email: "mila@sunnydays.creche", name: "Mila Nkosi", passwordHash },
+  });
   const maya = await db.user.create({
     data: {
       email: "maya@studiomath.io",
@@ -283,6 +300,35 @@ async function main() {
           { userId: maya.id, role: "OWNER" },
           { userId: noah.id, role: "STUDENT" },
           { userId: ava.id, role: "STUDENT" },
+        ],
+      },
+    },
+  });
+
+  const sunnyDays = await db.tenant.create({
+    data: {
+      slug: "sunny-days-creche",
+      name: "Sunny Days Creche",
+      kind: "CRECHE",
+      brandColor: "#F97316",
+      headline: "A bright, playful start for little learners.",
+      about:
+        "Sunny Days Creche is a warm early-learning space where children explore numbers, letters, shapes, and stories through play, songs, and guided activities.",
+      website: "https://sunnydays.example",
+      subscription: {
+        create: {
+          plan: "STARTER",
+          seats: 60,
+          status: "ACTIVE",
+          currentPeriodEnd: days(30),
+        },
+      },
+      memberships: {
+        create: [
+          { userId: lindiwe.id, role: "OWNER" },
+          { userId: amo.id, role: "STUDENT" },
+          { userId: zoe.id, role: "STUDENT" },
+          { userId: mila.id, role: "STUDENT" },
         ],
       },
     },
@@ -2811,6 +2857,164 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
     ],
   });
 
+  // ── Sunny Days Creche ────────────────────────────────────────────────────
+  console.log("Building Sunny Days Creche demo content…");
+  const littleStars = await db.course.create({
+    data: {
+      tenantId: sunnyDays.id,
+      ownerId: lindiwe.id,
+      title: "Little Stars Learning Journey",
+      subtitle: "Play, learn, and grow every day",
+      description:
+        "A cheerful early-learning course for creche children. Little learners explore colors, shapes, numbers, and stories through songs, play, and simple activities.",
+      subject: "Early Learning",
+      level: "Creche",
+      status: "PUBLISHED",
+    },
+  });
+
+  await db.lesson.createMany({
+    data: [
+      {
+        courseId: littleStars.id,
+        title: "Colors All Around Us",
+        summary: "Learn red, blue, yellow, and green with fun objects.",
+        order: 0,
+        published: true,
+        estimatedMinutes: 15,
+        content: `# Colors All Around Us 🌈
+
+Today we learn our happy colors!
+
+- **Red** like an apple 🍎
+- **Blue** like the sky ☁️
+- **Yellow** like the sun ☀️
+- **Green** like grass 🌱
+
+**Activity:** Can you find something red in your room?`,
+      },
+      {
+        courseId: littleStars.id,
+        title: "Shapes and Counting Fun",
+        summary: "Spot circles, squares, triangles and count to five.",
+        order: 1,
+        published: true,
+        estimatedMinutes: 15,
+        content: `# Shapes and Counting Fun ⭐
+
+Let's find shapes!
+
+- **Circle** — round like a ball
+- **Square** — four equal sides
+- **Triangle** — three sides
+
+Now count with me: **1, 2, 3, 4, 5!**
+
+**Activity:** Clap five times and draw a big circle.`,
+      },
+      {
+        courseId: littleStars.id,
+        title: "Story Time: The Friendly Star",
+        summary: "A short story about kindness and sharing.",
+        order: 2,
+        published: true,
+        estimatedMinutes: 10,
+        content: `# Story Time: The Friendly Star ✨
+
+Nkanyezi the little star loved to shine.
+
+One day, Nkanyezi saw a sad cloud. "I can share my light!" said Nkanyezi.
+
+The cloud smiled, and together they made a beautiful rainbow.
+
+**Lesson:** Sharing and kindness make everyone shine.`,
+      },
+    ],
+  });
+
+  const crecheQuiz = await db.assessment.create({
+    data: {
+      tenantId: sunnyDays.id,
+      courseId: littleStars.id,
+      title: "Colors and Shapes Check-In",
+      instructions: "A fun little check-in. Choose the best answer!",
+      type: "QUIZ",
+      status: "PUBLISHED",
+      timeLimitMin: 10,
+      attemptsAllowed: 3,
+      passScore: 60,
+      showResults: "AFTER_SUBMIT",
+      dueAt: days(14),
+    },
+  });
+
+  await db.question.create({
+    data: {
+      tenantId: sunnyDays.id,
+      assessmentId: crecheQuiz.id,
+      type: "MULTIPLE_CHOICE",
+      prompt: "What color is the sun in our lesson?",
+      points: 1,
+      difficulty: "EASY",
+      tags: "colors,creche",
+      order: 0,
+      data: JSON.stringify({
+        multiple: false,
+        options: [
+          { id: "cq1a", text: "Blue" },
+          { id: "cq1b", text: "Yellow" },
+          { id: "cq1c", text: "Green" },
+        ],
+        correct: ["cq1b"],
+      }),
+      explanation: "The sun is yellow in our colors lesson.",
+    },
+  });
+  await db.question.create({
+    data: {
+      tenantId: sunnyDays.id,
+      assessmentId: crecheQuiz.id,
+      type: "MULTIPLE_CHOICE",
+      prompt: "How many sides does a triangle have?",
+      points: 1,
+      difficulty: "EASY",
+      tags: "shapes,creche",
+      order: 1,
+      data: JSON.stringify({
+        multiple: false,
+        options: [
+          { id: "cq2a", text: "3" },
+          { id: "cq2b", text: "4" },
+          { id: "cq2c", text: "5" },
+        ],
+        correct: ["cq2a"],
+      }),
+      explanation: "A triangle has three sides.",
+    },
+  });
+  await db.question.create({
+    data: {
+      tenantId: sunnyDays.id,
+      assessmentId: crecheQuiz.id,
+      type: "YES_NO",
+      prompt: "In the story, Nkanyezi shared light with the cloud.",
+      points: 1,
+      difficulty: "EASY",
+      tags: "story,kindness,creche",
+      order: 2,
+      data: JSON.stringify({ correct: true }),
+      explanation: "Nkanyezi shared light, and they made a rainbow together.",
+    },
+  });
+
+  await db.enrollment.createMany({
+    data: [
+      { tenantId: sunnyDays.id, courseId: littleStars.id, userId: amo.id, progress: 100 },
+      { tenantId: sunnyDays.id, courseId: littleStars.id, userId: zoe.id, progress: 66 },
+      { tenantId: sunnyDays.id, courseId: littleStars.id, userId: mila.id, progress: 33 },
+    ],
+  });
+
   await db.notification.createMany({
     data: [
       {
@@ -2866,6 +3070,17 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
         emailSentAt: days(-1),
         createdAt: days(-1),
       },
+      {
+        tenantId: sunnyDays.id,
+        userId: amo.id,
+        senderId: lindiwe.id,
+        kind: "ANNOUNCEMENT",
+        audience: "LEARNERS",
+        title: "Welcome to Little Stars!",
+        body: "Hello little star! This week we are learning colors, shapes, and a story about kindness. Have fun learning!",
+        emailSentAt: days(-1),
+        createdAt: days(-1),
+      },
     ],
   });
 
@@ -2879,6 +3094,8 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
       { tenantId: studio.id, actorId: maya.id, action: "tenant.created", target: studio.id, createdAt: days(-3) },
       { tenantId: studio.id, actorId: maya.id, action: "course.published", target: sat.id, createdAt: days(-3) },
       { tenantId: studio.id, actorId: noah.id, action: "attempt.submitted", target: satQuiz.id, createdAt: days(-4) },
+      { tenantId: sunnyDays.id, actorId: lindiwe.id, action: "tenant.created", target: sunnyDays.id, createdAt: days(-2) },
+      { tenantId: sunnyDays.id, actorId: lindiwe.id, action: "course.published", target: littleStars.id, createdAt: days(-2) },
     ],
   });
 
@@ -2893,6 +3110,8 @@ $$\\sin^2\\theta+\\cos^2\\theta=1$$`,
   console.log("  Student       student@northfield.edu / Password123!");
   console.log("  Prospective   ethan@northfield.edu   / Password123! (not enrolled; placement demo)");
   console.log("  Solo teacher  maya@studiomath.io     / Password123!");
+  console.log("  Creche owner  teacher@sunnydays.creche / Password123!");
+  console.log("  Creche child  amo@sunnydays.creche     / Password123!");
   console.log("\n  Invite links: /join/northfield-demo-invite and /join/studio-demo-invite\n");
 }
 
