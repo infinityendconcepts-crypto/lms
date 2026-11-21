@@ -99,23 +99,11 @@ export default async function LandingPage({
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-white/95 via-white/85 to-white/60"
+          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-white/75 via-white/35 to-white/10"
         />
         <div
-          className="pointer-events-none absolute inset-0 -z-10"
-          style={{
-            background:
-              "radial-gradient(900px 420px at 15% 0%, #eef2ff 0%, transparent 60%), radial-gradient(700px 380px at 90% 10%, #f5f3ff 0%, transparent 55%)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.25]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
-            maskImage: "linear-gradient(to bottom, black, transparent 70%)",
-          }}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-white/40 via-transparent to-white/20"
         />
         <div className="mx-auto grid max-w-6xl items-center gap-14 px-4 pt-16 pb-20 sm:px-6 lg:grid-cols-[1.03fr_0.97fr] lg:pt-24">
           <div>
@@ -224,8 +212,8 @@ export default async function LandingPage({
           </div>
         </div>
 
-        <div className="border-y border-slate-100 bg-white/60">
-          <div className="mx-auto grid max-w-6xl grid-cols-2 divide-x divide-slate-100 px-4 sm:px-6 md:grid-cols-4">
+        <div className="border-y border-white/40 bg-white/30 backdrop-blur-[2px]">
+          <div className="mx-auto grid max-w-6xl grid-cols-2 divide-x divide-white/40 px-4 sm:px-6 md:grid-cols-4">
             {[
               ["9", "modern question types"],
               ["∞", "isolated workspaces"],
@@ -234,7 +222,7 @@ export default async function LandingPage({
             ].map(([value, label]) => (
               <div key={label} className="px-4 py-6 text-center">
                 <p className="text-2xl font-bold tracking-tight text-slate-900">{value}</p>
-                <p className="mt-0.5 text-[11px] font-medium tracking-wide text-slate-500 uppercase">
+                <p className="mt-0.5 text-[11px] font-medium tracking-wide text-slate-600 uppercase">
                   {label}
                 </p>
               </div>
