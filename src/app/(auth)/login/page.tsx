@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { generateTextChallenge, getSession, textChallengeEnabled } from "@/lib/auth";
 import { demoLoginAction } from "@/lib/actions/auth";
 import { LoginForm, DemoLogins } from "@/components/auth/AuthForms";
 
@@ -20,10 +20,11 @@ export default async function LoginPage({
       : sp.error === "demo"
         ? "Demo data is not seeded yet. Run npm run db:seed."
         : undefined;
+  const textChallenge = textChallengeEnabled() ? generateTextChallenge() : null;
 
   return (
     <>
-      <LoginForm next={sp.next} notice={notice} />
+      <LoginForm next={sp.next} notice={notice} textChallenge={textChallenge} />
       <DemoLogins demoAction={demoLoginAction} />
       <p className="mt-6 text-center text-[11px] text-slate-400">
         Trouble signing in?{" "}

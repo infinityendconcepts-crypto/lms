@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requireTenant } from "@/lib/tenant";
 import { applyManualGrade, autoGradeAttempt, refreshAttemptTotals } from "@/lib/grading";
 import { audit } from "@/lib/audit";
+import { notifyUsers } from "@/lib/notify";
 
 export async function gradeAnswerAction(formData: FormData) {
   const ctx = await requireTenant("TEACHER");
@@ -43,7 +44,7 @@ export async function finalizeAttemptAction(formData: FormData) {
   const attemptId = String(formData.get("attemptId") ?? "");
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, tenantId: ctx.tenant.id },
-    include: { answers: true },
+    include: { answers: true, assessment: { select: { title: true } } },
   });
   if (!attempt) throw new Error("Attempt not found");
 
@@ -68,6 +69,20 @@ export async function finalizeAttemptAction(formData: FormData) {
     action: "attempt.finalized",
     target: attemptId,
   });
+
+  if (attempt.studentId !== ctx.user.id) {
+    await notifyUsers({
+      tenantId: ctx.tenant.id,
+      recipientIds: [attempt.studentId],
+      senderId: ctx.user.id,
+      kind: "SYSTEM",
+      title: `Assessment graded: ${attempt.assessment.title}`,
+      body: `${ctx.user.name} has graded your submission for "${attempt.assessment.title}". View your results and feedback.`,
+      emailSubject: `${ctx.tenant.name}: Assessment graded - ${attempt.assessment.title}`,
+      link: `/results/${attemptId}`,
+    });
+  }
+
   revalidatePath(`/dashboard/grading/${attemptId}`);
   revalidatePath("/dashboard/grading");
   redirect(`/dashboard/grading/${attemptId}?finalized=1`);
@@ -107,6 +122,20 @@ export async function returnAttemptAction(formData: FormData) {
     action: "attempt.returned",
     target: attemptId,
   });
+
+  if (attempt.studentId !== ctx.user.id) {
+    await notifyUsers({
+      tenantId: ctx.tenant.id,
+      recipientIds: [attempt.studentId],
+      senderId: ctx.user.id,
+      kind: "SYSTEM",
+      title: `Assessment returned: ${attempt.assessment.title}`,
+      body: `${ctx.user.name} returned your submission for "${attempt.assessment.title}" with feedback. Please review and resubmit.`,
+      emailSubject: `${ctx.tenant.name}: Assessment returned - ${attempt.assessment.title}`,
+      link: `/results/${attemptId}`,
+    });
+  }
+
   revalidatePath(`/dashboard/grading/${attemptId}`);
   revalidatePath("/dashboard/grading");
   revalidatePath(`/results/${attemptId}`);

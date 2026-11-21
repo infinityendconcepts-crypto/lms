@@ -17,6 +17,7 @@ import {
   requestResetAction,
   resetPasswordAction,
   signupAction,
+  verifyLoginOtpAction,
   type AuthState,
 } from "@/lib/actions/auth";
 import { acceptInviteAction, type JoinState } from "@/lib/actions/tenant";
@@ -40,77 +41,155 @@ function Alert({ state }: { state: AuthState }) {
       <div>
         <p>{state.error ?? state.success}</p>
         {state.devLink && (
-          <Link href={state.devLink} className="mt-1 inline-block font-semibold underline">
-            Open reset link (dev)
-          </Link>
+          state.devLink.startsWith("/") ? (
+            <Link href={state.devLink} className="mt-1 inline-block font-semibold underline">
+              Open reset link (dev)
+            </Link>
+          ) : (
+            <p className="mt-1 font-mono text-xs font-semibold">{state.devLink}</p>
+          )
         )}
       </div>
     </div>
   );
 }
 
-export function LoginForm({ next, notice }: { next?: string; notice?: string }) {
-  const [state, action] = useActionState(loginAction, null);
+export function LoginForm({
+  next,
+  notice,
+  textChallenge,
+}: {
+  next?: string;
+  notice?: string;
+  textChallenge?: { prompt: string; sig: string } | null;
+}) {
+  const [loginState, loginFormAction] = useActionState(loginAction, null);
+  const [otpState, otpFormAction] = useActionState(verifyLoginOtpAction, null);
+  const otpFatal = Boolean(otpState?.error && !otpState.step && !otpState.challenge);
+  const state = otpState ?? loginState;
+  const otpStep = !otpFatal && (loginState?.step === "otp" || otpState?.step === "otp");
+  const challenge = otpState?.challenge ?? loginState?.challenge;
+  const email = otpState?.email ?? loginState?.email;
+
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Welcome back</h1>
-        <p className="mt-1 text-sm text-slate-500">Sign in to your workspace.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          {otpStep ? "Check your email" : "Welcome back"}
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          {otpStep
+            ? `Enter the one-time code sent to ${email ?? "your email"}.`
+            : "Sign in to your workspace."}
+        </p>
       </div>
-      {notice && (
+      {notice && !otpStep && (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-700">
           {notice}
         </div>
       )}
       <Alert state={state} />
-      <form action={action} className="space-y-4">
-        <input type="hidden" name="next" value={next ?? ""} />
-        <div>
-          <label className="label" htmlFor="email">
-            Email
-          </label>
-          <div className="relative">
-            <Mail className="pointer-events-none absolute top-3 left-3 size-4 text-slate-400" />
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              placeholder="you@school.edu"
-              className="input pl-9"
-            />
-          </div>
-        </div>
-        <div>
-          <div className="flex items-center justify-between">
-            <label className="label" htmlFor="password">
-              Password
+
+      {otpStep ? (
+        <form action={otpFormAction} className="space-y-4">
+          <input type="hidden" name="challenge" value={challenge ?? ""} />
+          <div>
+            <label className="label" htmlFor="otp">
+              One-time code
             </label>
-            <Link
-              href="/forgot-password"
-              className="mb-1.5 text-xs font-semibold text-brand-600 hover:underline"
-            >
-              Forgot password?
-            </Link>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute top-3 left-3 size-4 text-slate-400" />
+              <input
+                id="otp"
+                name="otp"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                placeholder="123456"
+                className="input pl-9 tracking-[0.2em]"
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              Code expires in 10 minutes. Check spam if you don&apos;t see it.
+            </p>
           </div>
-          <div className="relative">
-            <Lock className="pointer-events-none absolute top-3 left-3 size-4 text-slate-400" />
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              placeholder="••••••••"
-              className="input pl-9"
-            />
+          <SubmitButton className="w-full" pendingText="Verifying…">
+            Verify and sign in <ArrowRight className="size-4" />
+          </SubmitButton>
+        </form>
+      ) : (
+        <form action={loginFormAction} className="space-y-4">
+          <input type="hidden" name="next" value={next ?? ""} />
+          <div>
+            <label className="label" htmlFor="email">
+              Email
+            </label>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute top-3 left-3 size-4 text-slate-400" />
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                placeholder="you@school.edu"
+                className="input pl-9"
+              />
+            </div>
           </div>
-        </div>
-        <SubmitButton className="w-full" pendingText="Signing in…">
-          Sign in <ArrowRight className="size-4" />
-        </SubmitButton>
-      </form>
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="label" htmlFor="password">
+                Password
+              </label>
+              <Link
+                href="/forgot-password"
+                className="mb-1.5 text-xs font-semibold text-brand-600 hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute top-3 left-3 size-4 text-slate-400" />
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                placeholder="••••••••"
+                className="input pl-9"
+              />
+            </div>
+          </div>
+          {textChallenge ? (
+            <div>
+              <label className="label" htmlFor="textChallengeAnswer">
+                Anti-bot check
+              </label>
+              <div className="mb-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm font-semibold tracking-[0.25em] text-slate-700 select-none">
+                {textChallenge.prompt}
+              </div>
+              <input type="hidden" name="textChallengePrompt" value={textChallenge.prompt} />
+              <input type="hidden" name="textChallengeSig" value={textChallenge.sig} />
+              <input
+                id="textChallengeAnswer"
+                name="textChallengeAnswer"
+                required
+                autoComplete="off"
+                placeholder="Type the characters above"
+                className="input"
+              />
+              <p className="mt-1.5 text-[11px] text-slate-400">
+                Type the characters exactly as shown.
+              </p>
+            </div>
+          ) : null}
+          <SubmitButton className="w-full" pendingText="Checking credentials…">
+            Sign in <ArrowRight className="size-4" />
+          </SubmitButton>
+        </form>
+      )}
 
       <p className="mt-4 text-center text-sm text-slate-500">
         New to Nkanyezi?{" "}

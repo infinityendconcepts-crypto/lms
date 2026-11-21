@@ -29,6 +29,7 @@ model User {
   memberships               Membership[]
   sessions                  Session[]
   resetTokens               PasswordReset[]
+  loginChallenges           LoginChallenge[]
   invitationsSent           Invitation[]           @relation("Inviter")
   coursesOwned              Course[]               @relation("CourseOwner")
   enrollments               Enrollment[]
@@ -82,6 +83,25 @@ model PasswordReset {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model LoginChallenge {
+  id                 String    @id @default(cuid())
+  userId             String
+  tokenHash          String    @unique
+  otpHash            String
+  textChallenge      String?
+  textChallengeHash  String?
+  nextPath           String?
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  attempts           Int       @default(0)
+  createdAt          DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // A tenant is a school OR an individual teacher's workspace.

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -103,4 +104,28 @@ export function throttle(key: string, limit = 8, windowMs = 60_000) {
   entry.count += 1;
   if (entry.count > limit) return { ok: false, remaining: 0 };
   return { ok: true, remaining: limit - entry.count };
+}
+
+export function textChallengeEnabled() {
+  return process.env.LOGIN_TEXT_CHALLENGE === "true";
+}
+
+export function generateTextChallenge() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let prompt = "";
+  for (let i = 0; i < 6; i += 1) prompt += alphabet[randomInt(0, alphabet.length)];
+  const secret = process.env.AUTH_SECRET || "axiom-dev-secret";
+  const sig = createHmac("sha256", secret).update(prompt).digest("hex");
+  return { prompt, sig };
+}
+
+export function verifyTextChallenge(prompt: string, sig: string, answer: string) {
+  const secret = process.env.AUTH_SECRET || "axiom-dev-secret";
+  const expectedSig = createHmac("sha256", secret).update(prompt).digest("hex");
+  const sigOk =
+    sig.length > 0 &&
+    sig.length === expectedSig.length &&
+    timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig));
+  const answerOk = prompt.length > 0 && answer.trim().toUpperCase() === prompt.toUpperCase();
+  return sigOk && answerOk;
 }

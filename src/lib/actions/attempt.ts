@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireTenant } from "@/lib/tenant";
 import { autoGradeAttempt, isAttemptExpired } from "@/lib/grading";
 import { audit } from "@/lib/audit";
+import { notifyUsers } from "@/lib/notify";
 
 export async function startAttemptAction(formData: FormData) {
   const ctx = await requireTenant("STUDENT");
@@ -111,7 +112,11 @@ export async function submitAttemptAction(formData: FormData) {
 
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, studentId: ctx.user.id, tenantId: ctx.tenant.id },
-    include: { assessment: true },
+    include: {
+      assessment: {
+        include: { course: { select: { ownerId: true, title: true } } },
+      },
+    },
   });
   if (!attempt) redirect("/dashboard");
 
@@ -136,6 +141,20 @@ export async function submitAttemptAction(formData: FormData) {
       action: "attempt.submitted",
       target: attemptId,
     });
+
+    const courseOwnerId = attempt.assessment.course.ownerId;
+    if (courseOwnerId && courseOwnerId !== ctx.user.id) {
+      await notifyUsers({
+        tenantId: ctx.tenant.id,
+        recipientIds: [courseOwnerId],
+        senderId: ctx.user.id,
+        kind: "SYSTEM",
+        title: `Task submitted: ${attempt.assessment.title}`,
+        body: `${ctx.user.name} submitted "${attempt.assessment.title}" in ${attempt.assessment.course.title}. Review it in the grading queue.`,
+        emailSubject: `${ctx.tenant.name}: Task submitted - ${attempt.assessment.title}`,
+        link: `/dashboard/grading/${attemptId}`,
+      });
+    }
   }
 
   redirect(`/results/${attemptId}?submitted=1`);
@@ -146,6 +165,11 @@ export async function autoSubmitAttemptAction(attemptId: string) {
   const ctx = await requireTenant("STUDENT");
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, studentId: ctx.user.id, tenantId: ctx.tenant.id },
+    include: {
+      assessment: {
+        include: { course: { select: { ownerId: true, title: true } } },
+      },
+    },
   });
   if (!attempt || !["IN_PROGRESS", "RETURNED"].includes(attempt.status)) return { ok: false };
 
@@ -163,5 +187,20 @@ export async function autoSubmitAttemptAction(attemptId: string) {
     },
   });
   await autoGradeAttempt(attemptId);
+
+  const courseOwnerId = attempt.assessment.course.ownerId;
+  if (courseOwnerId && courseOwnerId !== ctx.user.id) {
+    await notifyUsers({
+      tenantId: ctx.tenant.id,
+      recipientIds: [courseOwnerId],
+      senderId: ctx.user.id,
+      kind: "SYSTEM",
+      title: `Task submitted: ${attempt.assessment.title}`,
+      body: `${ctx.user.name} submitted "${attempt.assessment.title}" in ${attempt.assessment.course.title}. Review it in the grading queue.`,
+      emailSubject: `${ctx.tenant.name}: Task submitted - ${attempt.assessment.title}`,
+      link: `/dashboard/grading/${attemptId}`,
+    });
+  }
+
   return { ok: true };
 }

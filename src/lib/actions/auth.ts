@@ -1,5 +1,6 @@
 "use server";
 
+import { randomInt } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -10,11 +11,12 @@ import {
   destroySession,
   getSession,
   requireUser,
-  signIn,
   TENANT_COOKIE,
+  textChallengeEnabled,
   throttle,
+  verifyTextChallenge,
 } from "@/lib/auth";
-import { hashPassword, newToken, tokenHash } from "@/lib/password";
+import { hashPassword, newToken, tokenHash, verifyPassword } from "@/lib/password";
 import { audit } from "@/lib/audit";
 import { appUrl, sendEmail } from "@/lib/email";
 import {
@@ -28,7 +30,17 @@ import { getPlan } from "@/lib/plan-catalog";
 import { normalizePromoCode, recordPromoRedemption, resolvePromo } from "@/lib/promos";
 import { randomSuffix, slugify } from "@/lib/utils";
 
-export type AuthState = { error?: string; success?: string; devLink?: string } | null;
+export type AuthState =
+  | {
+      error?: string;
+      success?: string;
+      devLink?: string;
+      step?: "otp";
+      challenge?: string;
+      email?: string;
+      notice?: string;
+    }
+  | null;
 
 const emailSchema = z.string().trim().toLowerCase().email();
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters");
@@ -46,31 +58,111 @@ function safeNext(value: FormDataEntryValue | null) {
   return next.startsWith("/") && !next.startsWith("//") ? next : "";
 }
 
+function generateOtp() {
+  return String(randomInt(100000, 1000000));
+}
+
 export async function loginAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const next = safeNext(formData.get("next"));
   if (!email || !password) return { error: "Enter your email and password." };
 
   const limit = throttle(`login:${email}`, 10, 60_000);
   if (!limit.ok) return { error: "Too many attempts. Please wait a minute." };
 
-  const user = await signIn(email, password);
-  if (!user) {
+  if (textChallengeEnabled()) {
+    const prompt = String(formData.get("textChallengePrompt") ?? "");
+    const sig = String(formData.get("textChallengeSig") ?? "");
+    const answer = String(formData.get("textChallengeAnswer") ?? "");
+    if (!verifyTextChallenge(prompt, sig, answer)) {
+      return { error: "Text verification failed. Please type the challenge exactly as shown." };
+    }
+  }
+
+  const user = await db.user.findUnique({ where: { email } });
+  const ok = user ? await verifyPassword(password, user.passwordHash) : false;
+  if (!user || !ok) {
     await audit({ action: "auth.login_failed", target: email });
     return { error: "Those credentials don't match. Try again." };
   }
 
+  const otp = generateOtp();
+  const challengeToken = newToken();
+  const expiresAt = new Date(Date.now() + 10 * 60_000);
+  await db.loginChallenge.deleteMany({
+    where: { userId: user.id, consumedAt: null, expiresAt: { lt: new Date(Date.now() + 60 * 60_000) } },
+  });
+  await db.loginChallenge.create({
+    data: {
+      userId: user.id,
+      tokenHash: tokenHash(challengeToken),
+      otpHash: tokenHash(otp),
+      nextPath: next || null,
+      expiresAt,
+    },
+  });
+
+  await sendEmail({
+    to: user.email,
+    kind: "LOGIN_OTP",
+    subject: "Your Nkanyezi login code",
+    body: `Your one-time login code is: ${otp}\n\nThis code expires in 10 minutes. If you did not try to sign in, you can ignore this email.`,
+  });
+  await audit({ actorId: user.id, action: "auth.login_otp_sent", target: user.email });
+
+  return {
+    step: "otp",
+    challenge: challengeToken,
+    email: user.email,
+    notice: "We sent a one-time code to your email.",
+    devLink: process.env.NODE_ENV !== "production" ? `OTP (dev): ${otp}` : undefined,
+  };
+}
+
+export async function verifyLoginOtpAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const challengeToken = String(formData.get("challenge") ?? "");
+  const otp = String(formData.get("otp") ?? "").trim();
+  if (!challengeToken || !otp) return { error: "Enter the code from your email." };
+
+  const record = await db.loginChallenge.findUnique({
+    where: { tokenHash: tokenHash(challengeToken) },
+    include: { user: true },
+  });
+  if (!record || record.consumedAt || record.expiresAt < new Date()) {
+    return { error: "This login code is invalid or has expired. Sign in again." };
+  }
+
+  if (record.attempts >= 5) {
+    await db.loginChallenge.update({ where: { id: record.id }, data: { consumedAt: new Date() } });
+    return { error: "Too many incorrect codes. Sign in again." };
+  }
+
+  const otpOk = tokenHash(otp) === record.otpHash;
+  if (!otpOk) {
+    await db.loginChallenge.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } });
+    return {
+      error: "Incorrect code. Try again.",
+      step: "otp",
+      challenge: challengeToken,
+      email: record.user.email,
+    };
+  }
+
+  await db.loginChallenge.update({ where: { id: record.id }, data: { consumedAt: new Date() } });
+
   const first = await db.membership.findFirst({
-    where: { userId: user.id, status: "ACTIVE" },
+    where: { userId: record.userId, status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
   });
+  await createSession(record.userId);
   if (first) {
     const jar = await cookies();
     jar.set(TENANT_COOKIE, first.tenantId, cookieOptions);
   }
-  await audit({ actorId: user.id, tenantId: first?.tenantId, action: "auth.login" });
+  await audit({ actorId: record.userId, tenantId: first?.tenantId, action: "auth.login" });
 
-  redirect(safeNext(formData.get("next")) || (first ? "/dashboard" : "/admin"));
+  redirect(record.nextPath || (first ? "/dashboard" : "/admin"));
 }
 
 export async function signupAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
