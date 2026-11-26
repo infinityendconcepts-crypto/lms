@@ -2,7 +2,7 @@
  * Nkanyezi LMS demo seed.
  *
  * Run with: npm run db:seed
- * Resets the local SQLite database and recreates two tenants, users,
+ * Resets the demo database and recreates three tenants, users,
  * courses, lessons, every question type, attempts and grading queues.
  */
 import { mkdir, writeFile } from "node:fs/promises";
@@ -28,7 +28,7 @@ const ids = {
 };
 
 async function reset() {
-  // Order matters for FK constraints on SQLite.
+  // Order matters for FK constraints.
   await db.courseEligibility.deleteMany();
   await db.coursePlanTask.deleteMany();
   await db.codePadSubmission.deleteMany();

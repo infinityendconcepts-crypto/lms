@@ -1,13 +1,13 @@
 // Nkanyezi LMS — multi-tenant schema
-// SQLite is used for zero-config local development. For production,
-// switch the provider to "postgresql" (all IDs/enums are string-based).
+// PostgreSQL is used for both local development and production.
+// All IDs and enums are string-based.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

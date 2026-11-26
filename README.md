@@ -212,8 +212,8 @@ npm run db:studio  # Prisma Studio
 
 ## Production notes
 
-- Replace the SQLite datasource with PostgreSQL in `prisma/schema.prisma` for multi-instance
-  deployments. All IDs and enums are string-based.
+- The datasource uses PostgreSQL for both local development and production.
+  All IDs and enums are string-based.
 - Set strong `AUTH_SECRET` and `AI_SECRET` values.
 - Configure a transactional email provider in `src/lib/email.ts`; development writes to the email
   outbox instead.
